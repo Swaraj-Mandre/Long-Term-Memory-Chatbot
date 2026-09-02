@@ -65,27 +65,82 @@ async function sendMessage(event) {
 
   addBubble(message, "user");
 
-  // Placeholder bubble, replaced once the reply arrives.
-  const pending = addBubble("thinking...", "bot");
+  // The bubble starts empty and fills up as the reply arrives.
+  const bubble = addBubble("thinking...", "bot");
+  bubble.classList.add("waiting");
   el("btnSend").disabled = true;
 
+  // Set to true by the first piece of real text, which is when we clear the
+  // "thinking..." placeholder out of the bubble.
+  let replyStarted = false;
+  let text = "";
+
+  function addText(piece) {
+    if (!replyStarted) {
+      replyStarted = true;
+      bubble.classList.remove("waiting");
+      bubble.classList.add("streaming");
+      bubble.textContent = "";
+    }
+    text += piece;
+    bubble.textContent = text;
+    scrollToBottom();
+  }
+
+  // One event from the server. See send_stream in chat_engine.py for the list.
+  function handleEvent(event) {
+    if (event.type === "context") {
+      // Memory results arrive before the reply is written, so the panel on
+      // the right fills in while the model is still thinking.
+      renderRetrieved(event.details.memories_used);
+      renderContradictions(event.details.contradictions);
+    } else if (event.type === "token") {
+      addText(event.text);
+    } else if (event.type === "done") {
+      showTurnDetails(event.details);
+    } else if (event.type === "error") {
+      addText("\n\nError: " + event.error);
+    }
+    // "thinking" needs no action. The placeholder is already showing.
+  }
+
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: message }),
     });
-    const data = await response.json();
 
-    if (data.error) {
-      pending.textContent = "Error: " + data.error;
-    } else {
-      pending.textContent = data.reply;
-      showTurnDetails(data.details);
+    if (!response.ok || !response.body) {
+      throw new Error("server returned status " + response.status);
+    }
+
+    // Read the response as it arrives instead of waiting for all of it.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+
+      // A read can end in the middle of an event, so we collect text in a
+      // buffer and only handle the events that are complete. A blank line
+      // marks the end of an event.
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+
+      parts.forEach(function (part) {
+        if (!part.startsWith("data: ")) return;
+        handleEvent(JSON.parse(part.slice(6)));
+      });
     }
   } catch (error) {
-    pending.textContent = "Could not reach the server: " + error;
+    addText("\n\nCould not reach the server: " + error);
   } finally {
+    bubble.classList.remove("waiting", "streaming");
+    if (!text) bubble.textContent = "No reply came back.";
     el("btnSend").disabled = false;
     loadMemories();
     input.focus();
@@ -282,6 +337,16 @@ async function resetEverything() {
 /* ------------------------------------------------------------- start-up */
 
 el("composer").addEventListener("submit", sendMessage);
+
+// Send on Enter. A form normally does this by itself, but doing it explicitly
+// means it cannot fail, which matters when the app is being demonstrated.
+el("messageInput").addEventListener("keydown", function (event) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage(event);
+  }
+});
+
 el("btnNewSession").addEventListener("click", startNewSession);
 el("btnReset").addEventListener("click", resetEverything);
 

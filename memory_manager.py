@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime, timezone
 
 import config
+import debug_log
 from embedder import Embedder
 from vector_store import ChromaVectorStore, utc_now
 
@@ -194,6 +195,7 @@ class MemoryManager:
                 "superseded_by": "",
             },
         )
+        debug_log.privacy(private_items)
         return memory_id
 
     def remember_fact(self, key, value, session_id, confidence=0.9):
@@ -256,7 +258,10 @@ class MemoryManager:
                 "superseded_at": utc_now(),
             })
 
-        return self.store.get(memory_id), previous
+        written = self.store.get(memory_id)
+        debug_log.memory_write(written, previous)
+        debug_log.privacy(private_items)
+        return written, previous
 
     # -----------------------------------------------------------------------
     # Reading memories
@@ -369,6 +374,11 @@ class MemoryManager:
         # Best score first, then keep only as many as we asked for.
         results.sort(key=lambda item: item["score"], reverse=True)
         results = results[:top_k]
+
+        # Print the whole search: what was asked, what the store offered, and
+        # how each candidate scored. This is the answer to "how do you retrieve
+        # the right memory", shown rather than described.
+        debug_log.retrieval(query, search_text, candidates, results, threshold)
 
         # Record that these were used. The pruning step later keeps the
         # memories that keep proving useful and drops the ones that never do.

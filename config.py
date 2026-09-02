@@ -147,3 +147,21 @@ def check_configuration():
         problems.append("ATLASCLOUD_BASE_URL does not look like a URL.")
 
     return problems
+
+
+# ---------------------------------------------------------------------------
+# 6. Console debug output
+# ---------------------------------------------------------------------------
+# When this is on, every turn prints what actually happened to the terminal:
+# the exact request sent to the model, its raw reply and internal reasoning,
+# the memory search with every score, and the full prompt used to write the
+# answer.
+#
+# It is on by default because this project is judged on being explainable, and
+# the printout is the fastest way to show what the system really did rather
+# than what it appears to have done. Set DEBUG=false in .env to silence it.
+DEBUG_LOG = os.getenv("DEBUG", "true").strip().lower() not in ("0", "false", "no")
+
+# Longest single value printed before it is cut short, so one large prompt
+# cannot fill the screen.
+DEBUG_MAX_CHARS = int(os.getenv("DEBUG_MAX_CHARS", "700"))
