@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chatbot with Long-Term Memory</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- Top bar: what is running, and the controls used during the demo -->
+<header class="topbar">
+  <div class="identity">
+    <h1>Chatbot with Long-Term Memory</h1>
+    <p class="subtitle">Topic 192 &middot; Generative AI &middot; Model Making</p>
+  </div>
+
+  <div class="status-group">
+    <span class="status-chip" id="chipSession">session-1</span>
+
+    <!-- Click to see what each part of the system is doing. Closes again when
+         the pointer leaves it, so it never gets in the way during the demo. -->
+    <div class="stack-menu" id="stackMenu">
+      <button type="button" class="stack-toggle" id="stackToggle" aria-expanded="false">
+        Tech stack
+        <span class="chevron" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="stack-panel" id="stackPanel" hidden></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="btnNewSession" class="button">Start New Session</button>
+    <button id="btnReset" class="button button-quiet">Wipe Memory</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- LEFT: the conversation -->
+  <section class="chat-pane">
+    <div class="transcript" id="transcript">
+      <div class="notice">
+        Memory loaded from disk. Tell the assistant something about yourself.
+      </div>
+    </div>
+
+    <form class="composer" id="composer">
+      <input
+        id="messageInput"
+        class="message-input"
+        type="text"
+        placeholder="Type a message, or /forget city to delete a topic"
+        autocomplete="off"
+        autofocus>
+      <button type="submit" class="button button-primary" id="btnSend">Send</button>
+    </form>
+  </section>
+
+  <!-- RIGHT: what the memory system did. This panel is the demonstration. -->
+  <aside class="inspector">
+
+    <section class="panel">
+      <h2 class="panel-title">Memory Statistics</h2>
+      <div class="stat-grid" id="statGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Retrieved For This Message
+        <span class="panel-note">ranked by similarity</span>
+      </h2>
+      <div id="retrievedList">
+        <p class="empty-note">Nothing retrieved yet.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Contradictions Resolved
+        <span class="panel-note">newer fact replaces older</span>
+      </h2>
+      <div id="contradictionList">
+        <p class="empty-note">No contradictions yet.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Memory Store
+        <span class="panel-note" id="storeCount"></span>
+      </h2>
+      <div class="memory-list" id="memoryList"></div>
+    </section>
+
+  </aside>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

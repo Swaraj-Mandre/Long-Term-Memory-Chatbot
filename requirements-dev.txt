@@ -1,0 +1,13 @@
+# Extra packages only needed to rebuild the project's documents.
+# Not required to run the chatbot.
+#
+# Install with:   pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+# Drives a headless browser to regenerate the screenshots in docs/assets.
+# After installing, also run:  python -m playwright install chromium
+playwright>=1.62.0
+
+# Reads the generated .pptx back so its contents can be checked.
+python-pptx>=1.0.2

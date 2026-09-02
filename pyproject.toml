@@ -1,0 +1,28 @@
+[project]
+name = "long-term-memory-chatbot"
+version = "0.1.0"
+description = "Chatbot with Long-Term Memory - Generative AI jury project, Topic 192"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Client library for the language model. Note this does NOT mean we call
+    # OpenAI's models - the library is pointed at AtlasCloud, which serves
+    # DeepSeek v4 Flash using the same request format.
+    "openai>=3.6.0",
+
+    # Vector database. Stores memory embeddings on disk and, crucially, lets us
+    # filter by metadata during the search so superseded facts are excluded.
+    "chromadb>=1.5.9",
+
+    # Turns sentences into vectors, locally. Keeps the memory store off the network.
+    "sentence-transformers>=6.0.1",
+
+    # Required by sentence-transformers to run the model.
+    "torch>=2.13.0",
+
+    # Reads the API key from the .env file.
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv]
+package = false
