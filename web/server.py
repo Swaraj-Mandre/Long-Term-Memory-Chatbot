@@ -81,8 +81,8 @@ def describe_tech_stack():
         {
             "part": "Interface",
             "value": "Python http.server",
-            "purpose": "Plain HTML, CSS and JavaScript with no framework, so "
-                       "every part of it is visible in the project files.",
+            "purpose": "Plain HTML, CSS and JavaScript with no framework. The "
+                       "reply is streamed in as the model writes it.",
         },
     ]
 
@@ -122,6 +122,31 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    # -- sending a reply in pieces while it is still being written ----------
+    # This uses Server-Sent Events, which is just a normal HTTP response that
+    # we keep open and write into as text arrives. Each piece is written as:
+    #
+    #     data: {"type": "token", "text": "Hello"}\n\n
+    #
+    # The blank line is what tells the browser one event has ended. There is no
+    # Content-Length header, because we do not know the length yet, so the
+    # browser reads until the connection closes.
+    def start_event_stream(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        # Tells any proxy in between not to hold our pieces back and deliver
+        # them in one lump, which would defeat the whole point.
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+    def send_event(self, payload):
+        """Write one event and push it out immediately."""
+        self.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode("utf-8"))
+        # Without this flush the pieces sit in a buffer and all arrive at once.
+        self.wfile.flush()
 
     def send_file(self, filename, content_type):
         path = os.path.join(STATIC_DIR, filename)
@@ -179,6 +204,32 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "message was empty"})
             reply, details = ENGINE.send(message)
             return self.send_json(200, {"reply": reply, "details": details})
+
+        if self.path == "/api/chat/stream":
+            # Same turn as /api/chat, but the reply is sent out as it is
+            # written instead of after it is finished. /api/chat is kept as
+            # well, so the interface still works if streaming is switched off.
+            message = (data.get("message") or "").strip()
+            if not message:
+                return self.send_json(400, {"error": "message was empty"})
+
+            self.start_event_stream()
+            try:
+                for event in ENGINE.send_stream(message):
+                    self.send_event(event)
+            except (BrokenPipeError, ConnectionResetError):
+                # The user closed the tab or pressed reload mid-reply. Nothing
+                # to report, and the turn was already saved to memory.
+                pass
+            except Exception as error:                      # noqa: BLE001
+                # The connection is already open, so an error cannot be sent
+                # as a normal HTTP status code. It goes down the stream instead
+                # and the page shows it in the chat.
+                try:
+                    self.send_event({"type": "error", "error": str(error)})
+                except OSError:
+                    pass
+            return
 
         if self.path == "/api/session/new":
             # Starting a new session clears the recent-messages list. Anything

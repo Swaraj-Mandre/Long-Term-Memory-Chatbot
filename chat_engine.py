@@ -15,6 +15,7 @@ history.
 """
 
 import config
+import debug_log
 from llm_client import LLMClient, LLMError
 from memory_manager import MemoryManager
 
@@ -73,6 +74,9 @@ class ChatEngine:
 
         # Details of the most recent turn, shown in the interface panel.
         self.last_turn = {}
+
+        # Counts turns so the console output is easy to follow.
+        self.turn_number = 0
 
     # -----------------------------------------------------------------------
     # Step 1: find facts in the message
@@ -153,18 +157,30 @@ class ChatEngine:
     # -----------------------------------------------------------------------
     # The whole turn
     # -----------------------------------------------------------------------
-    def send(self, message):
-        """
-        Handle one user message and return (reply, details).
+    # A turn is split into parts, because there are two ways to run it: all at
+    # once (send) or streamed piece by piece (send_stream). Both use the same
+    # before-and-after code, so the two paths cannot drift apart and start
+    # behaving differently.
+    #
+    #   _before_reply -> steps 1, 2, 3   (find facts, store them, search)
+    #   the reply     -> step 4          (this is the part that can stream)
+    #   _after_reply  -> step 5          (save the message, trim, record)
+    # -----------------------------------------------------------------------
+    def _before_reply(self, message):
+        """Steps 1 to 3. Returns everything steps 4 and 5 will need."""
+        self.turn_number += 1
+        debug_log.turn_header(self.turn_number, self.session_id, message)
 
-        `details` describes everything that happened internally, which is what
-        the interface panel displays: which facts were found, which memories
-        were retrieved and with what scores, and any contradiction resolved.
-        """
         # 1 + 2: find facts and store them, noting anything they replaced.
+        debug_log.step(1, "reading the message for lasting facts")
         facts = self.extract_facts(message)
         stored_facts = []
         contradictions = []
+
+        if facts:
+            debug_log.step(2, "writing those facts to memory")
+        else:
+            debug_log.note("no lasting facts in this message, nothing written")
 
         for fact in facts:
             new_record, replaced = self.memory.remember_fact(
@@ -185,27 +201,17 @@ class ChatEngine:
                 })
 
         # 3: search memory for anything relevant to this message.
+        debug_log.step(3, "searching memory")
         memories = self.memory.recall(message)
 
-        # 4: ask the model, using those memories.
-        messages = self.build_messages(message, memories)
-        try:
-            reply = self.llm.chat(messages)
-            model_used = config.LLM_MODEL
-        except LLMError as error:
-            # If the model is unreachable we still answer from memory alone,
-            # so the memory features can be demonstrated without a connection.
-            model_used = "unavailable"
-            if memories:
-                reply = (
-                    "I cannot reach the language model right now, but here is "
-                    "what I have stored:\n"
-                    + "\n".join("- " + memory["text"] for memory in memories)
-                )
-            else:
-                reply = "I cannot reach the language model right now (%s)." % error
+        return {
+            "facts_found": stored_facts,
+            "contradictions": contradictions,
+            "memories_used": memories,
+        }
 
-        # 5: save the message itself, then trim if the store has grown large.
+    def _after_reply(self, message, reply, model_used, context):
+        """Step 5, plus recording what happened for the interface panel."""
         self.memory.remember_message(message, self.session_id)
         pruned = self.memory.prune()
 
@@ -213,15 +219,113 @@ class ChatEngine:
         self.working_memory.append({"role": "assistant", "content": reply})
 
         self.last_turn = {
-            "facts_found": stored_facts,
-            "contradictions": contradictions,
-            "memories_used": memories,
+            "facts_found": context["facts_found"],
+            "contradictions": context["contradictions"],
+            "memories_used": context["memories_used"],
             "pruned_count": len(pruned),
             "model": model_used,
             "tokens_used": self.llm.total_tokens,
             "summary": self.memory.summary(),
         }
-        return reply, self.last_turn
+
+        debug_log.turn_footer(self.last_turn["summary"], len(pruned))
+        return self.last_turn
+
+    def _offline_reply(self, memories, error):
+        """
+        What to say when the model cannot be reached.
+
+        We answer from memory alone rather than failing, so the memory side of
+        the project can still be demonstrated without a working connection.
+        """
+        if memories:
+            return (
+                "I cannot reach the language model right now, but here is "
+                "what I have stored:\n"
+                + "\n".join("- " + memory["text"] for memory in memories)
+            )
+        return "I cannot reach the language model right now (%s)." % error
+
+    def send(self, message):
+        """
+        Handle one user message and return (reply, details).
+
+        `details` describes everything that happened internally, which is what
+        the interface panel displays: which facts were found, which memories
+        were retrieved and with what scores, and any contradiction resolved.
+        """
+        context = self._before_reply(message)
+
+        # 4: ask the model, using those memories.
+        debug_log.step(4, "writing the reply")
+        messages = self.build_messages(message, context["memories_used"])
+        try:
+            reply = self.llm.chat(messages)
+            model_used = config.LLM_MODEL
+        except LLMError as error:
+            reply = self._offline_reply(context["memories_used"], error)
+            model_used = "unavailable"
+
+        details = self._after_reply(message, reply, model_used, context)
+        return reply, details
+
+    def send_stream(self, message):
+        """
+        The same turn, but handed back in pieces as it happens.
+
+        Yields these events, in this order:
+
+            {"type": "context", "details": ...}   what memory found, sent early
+            {"type": "thinking"}                  the model is reasoning
+            {"type": "token", "text": ...}        a piece of the reply
+            {"type": "done", "reply", "details"}  the finished turn
+
+        Two reasons this is worth doing:
+
+          - The "context" event goes out before the model has written a single
+            word, so the panel can show which memories were retrieved while the
+            reply is still being written. In a demo that is the interesting
+            part, and this way it appears first instead of last.
+
+          - This model reasons before it answers, which takes around three
+            seconds. Streaming lets us say honestly that it is thinking,
+            instead of showing a spinner that looks like a frozen app.
+        """
+        context = self._before_reply(message)
+
+        # Send the memory work out immediately. The reply follows after it.
+        yield {"type": "context", "details": dict(context)}
+
+        debug_log.step(4, "writing the reply, streamed")
+        messages = self.build_messages(message, context["memories_used"])
+
+        pieces = []
+        model_used = config.LLM_MODEL
+        try:
+            for piece in self.llm.chat_stream(messages):
+                if piece["type"] == "thinking":
+                    yield {"type": "thinking"}
+                elif piece["type"] == "token":
+                    pieces.append(piece["text"])
+                    yield {"type": "token", "text": piece["text"]}
+            reply = "".join(pieces).strip()
+
+        except LLMError as error:
+            # The stream can fail after some text has already been shown on
+            # screen. In that case we add the fallback to what is there rather
+            # than replacing it, because the user has already read the start.
+            model_used = "unavailable"
+            fallback = self._offline_reply(context["memories_used"], error)
+            shown = "".join(pieces).strip()
+            if shown:
+                yield {"type": "token", "text": "\n\n" + fallback}
+                reply = shown + "\n\n" + fallback
+            else:
+                yield {"type": "token", "text": fallback}
+                reply = fallback
+
+        details = self._after_reply(message, reply, model_used, context)
+        yield {"type": "done", "reply": reply, "details": details}
 
     def start_new_session(self, session_id):
         """

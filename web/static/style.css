@@ -268,6 +268,38 @@ body {
   border-bottom-left-radius: 4px;
 }
 
+/* While the model is reasoning, before any words exist yet. It reasons for
+   about three seconds before it starts writing, so this state is worth
+   showing clearly rather than leaving the bubble looking finished. */
+.bubble.waiting {
+  color: var(--text-soft);
+  font-style: italic;
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* A blinking block after the last character while text is still arriving,
+   so it is obvious the reply is not finished. */
+.bubble.streaming::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: caret 1s step-end infinite;
+}
+
+@keyframes caret {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
 /* System lines: session changes, deletions. Centred so they read as events
    rather than as something either party said. */
 .notice {

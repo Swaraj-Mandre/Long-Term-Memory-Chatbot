@@ -41,6 +41,7 @@ message, with the actual similarity score, and it flags the moment a new fact re
 | **Resolves contradictions** | Say you moved cities and the old fact is retired, never returned again |
 | **Controls its own growth** | Raw messages are capped and trimmed. Extracted facts are kept |
 | **Protects private data** | Emails, phone numbers and ID numbers are stripped before anything is saved |
+| **Replies as it writes** | The answer appears word by word instead of all at once, and the memory panel fills in first |
 
 ### The contradiction bit, in one picture
 
@@ -202,6 +203,13 @@ python run.py
 ```
 
 Then open **http://localhost:8000** in your browser. Press `Ctrl+C` in the terminal to stop.
+
+**Watch the terminal while you chat.** Every turn prints what really happened: the
+exact prompt sent to the model, the model's own reasoning, the memory search with
+every score, and the token count. It is the quickest way to understand the system,
+and useful if a faculty member asks how you know a memory was actually used.
+
+To turn that off, add `DEBUG=false` to your `.env` file.
 
 ---
 
