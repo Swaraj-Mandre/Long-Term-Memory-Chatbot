@@ -1,0 +1,25 @@
+# Packages needed to run the chatbot.
+#
+# Install with:   pip install -r requirements.txt
+#
+# Versions are the ones this project was built and tested against. Newer
+# versions will most likely work, but these are known good.
+
+# Client for the language model. Note this does NOT mean we call OpenAI's
+# models. The library is pointed at AtlasCloud, which serves DeepSeek v4 Flash
+# using the same request format.
+openai>=3.6.0
+
+# Vector database. Stores memory embeddings on disk, and filters out replaced
+# facts during the search rather than after it.
+chromadb>=1.5.9
+
+# Turns text into vectors, locally. This is what keeps the memory store off the
+# network.
+sentence-transformers>=6.0.1
+
+# Required by sentence-transformers to run the embedding model.
+torch>=2.13.0
+
+# Reads the API key out of the .env file.
+python-dotenv>=1.2.3

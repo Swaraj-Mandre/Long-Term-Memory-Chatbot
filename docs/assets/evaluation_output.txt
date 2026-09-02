@@ -1,0 +1,99 @@
+==========================================================================
+  MEMORY SYSTEM EVALUATION
+  Chatbot with Long-Term Memory  |  Topic 192
+==========================================================================
+  Embedding model : sentence-transformers/all-MiniLM-L6-v2
+  Similarity floor: 0.25
+  Recency weight  : 0.15
+  Store contents  : {'total': 18, 'facts': 12, 'messages': 6, 'superseded': 0, 'pruned': 0, 'sessions': 3}
+
+1. RETRIEVAL QUALITY  (top-k = 4, threshold = 0.25)
+--------------------------------------------------------------------------
+QUESTION                           PRECISION    RECALL TOP RESULT
+--------------------------------------------------------------------------
+Where do I live?                        1.00      1.00  city: Pune
+What is my name?                        0.50      1.00  name: Swaraj
+Which college do I attend?              1.00      1.00  college: MIT ADT Universit
+What food do I like?                    0.25      1.00  favourite food: misal pav
+Do I have any pets?                     1.00      1.00  pet: a dog named Bruno
+What sport do I follow?                 0.50      1.00  favourite sport: football
+What do I do in my free time?           1.00      1.00  hobby: playing cricket
+Where do I work?                        1.00      1.00  employer: Infosys
+What language do I speak?               1.00      1.00  language: Marathi
+What am I studying?                     0.25      1.00  course: Artificial Intelli
+What is my career goal?                 0.50      1.00  goal: to become an AI engi
+Can I eat chicken?                      0.33      1.00  dietary preference: vegeta
+--------------------------------------------------------------------------
+Mean Precision@4 : 0.694
+Mean Recall@4    : 1.000
+MRR              : 1.000
+Correct at rank 1: 1.000  (12 of 12)
+
+Note on precision: each question here has exactly ONE correct
+memory, so returning 4 results caps precision at 0.25 by definition.
+Precision is therefore the weakest of these measures for this task.
+MRR and rank-1 accuracy describe the behaviour that actually
+matters: whether the right memory comes back, and how near the top.
+
+2. CHOOSING THE SIMILARITY THRESHOLD
+--------------------------------------------------------------------------
+Tested on all 22 questions (12 plain + 10 conversational).
+--------------------------------------------------------------------------
+THRESHOLD     PRECISION   RECALL      MRR   RANK-1 QUESTIONS WITH NO ANSWER
+--------------------------------------------------------------------------
+0.10              0.250    1.000    1.000    1.000 0 of 22
+0.15              0.277    1.000    1.000    1.000 0 of 22
+0.20              0.409    1.000    1.000    1.000 0 of 22
+0.22              0.530    1.000    1.000    1.000 0 of 22
+0.25              0.640    1.000    1.000    1.000 0 of 22
+0.30              0.598    0.864    0.864    0.864 3 of 22
+0.35              0.712    0.818    0.818    0.818 4 of 22
+--------------------------------------------------------------------------
+Best measured value: 0.25  (MRR 1.000, 0 unanswered)
+Currently set in config.py: 0.25
+
+3. EFFECT OF CLEANING THE QUESTION
+--------------------------------------------------------------------------
+Conversational phrasings such as 'Do you remember where I live?'
+--------------------------------------------------------------------------
+  cleaning OFF           answered correctly  9 of 10   (rate 0.900, MRR 0.933)
+  cleaning ON            answered correctly 10 of 10   (rate 1.000, MRR 1.000)
+--------------------------------------------------------------------------
+Improvement from cleaning: +0.100  (+10.0 percentage points)
+
+4. CONTRADICTION HANDLING
+--------------------------------------------------------------------------
+FACT UPDATED           QUESTION ASKED         OLD GONE   NEW FOUND
+--------------------------------------------------------------------------
+city: Pune to Mumbai   Which city am I livin  yes        yes
+employer: Infosys to TCS Who do I work for?     yes        yes
+favourite_sport: football to badminton What sport do I like   yes        yes
+dietary_preference: vegetarian to vegan What do I eat?         yes        yes
+--------------------------------------------------------------------------
+Handled correctly: 1.000  (4 of 4)
+
+5. WHAT THE STATUS FILTER PREVENTS
+--------------------------------------------------------------------------
+Re-running the same questions with superseded records left in.
+--------------------------------------------------------------------------
+  Which city am I living   outdated 'Pune' returned at similarity 0.424
+  Who do I work for?       outdated 'Infosys' returned at similarity 0.416
+  What sport do I like mo  outdated 'football' returned at similarity 0.651
+  What do I eat?           outdated 'vegetarian' returned at similarity 0.381
+--------------------------------------------------------------------------
+Questions that would have received an outdated fact: 1.000  (4 of 4)
+With the filter on, this figure is 0 of 4.
+
+==========================================================================
+  SUMMARY
+==========================================================================
+  Precision@4                      : 0.694
+  Recall@4                         : 1.000
+  MRR                              : 1.000
+  Correct memory ranked first      : 1.000
+  Contradictions handled correctly : 1.000
+  Stale facts leaked without filter: 1.000
+  Conversational, cleaning off     : 0.900
+  Conversational, cleaning on      : 1.000
+  Best threshold by measurement    : 0.25
+==========================================================================
