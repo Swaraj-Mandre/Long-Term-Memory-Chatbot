@@ -85,6 +85,17 @@ Reply: {"facts": [], "emotion": "sadness", "reason": "failed exam again", "risk"
 """
 
 
+def remove_em_dashes(text):
+    """
+    Replace em dashes with commas.
+
+    The prompt already asks the model not to use them, but a reasoning model
+    does not always follow style rules, so we make sure here. It changes
+    punctuation only, never words.
+    """
+    return text.replace(" — ", ", ").replace("—", ", ")
+
+
 class ChatEngine:
     def __init__(self, session_id="session-1", memory=None, llm=None):
         self.session_id = session_id
@@ -183,7 +194,8 @@ class ChatEngine:
             "been filtered out, so you can trust them.\n"
             "- If they ask something these notes do not cover, say you do not "
             "know rather than guessing.\n"
-            "- Keep replies under 80 words."
+            "- Keep replies under 80 words.\n"
+            "- Write in plain, simple sentences. Do not use em dashes."
         )
 
         if mood and tone:
@@ -356,7 +368,7 @@ class ChatEngine:
                 message, context["memories_used"], context["mood"], context["tone"]
             )
             try:
-                reply = self.llm.chat(messages)
+                reply = remove_em_dashes(self.llm.chat(messages))
                 model_used = config.LLM_MODEL
             except LLMError as error:
                 reply = self._offline_reply(context["memories_used"], error)
@@ -412,8 +424,9 @@ class ChatEngine:
                 if piece["type"] == "thinking":
                     yield {"type": "thinking"}
                 elif piece["type"] == "token":
-                    pieces.append(piece["text"])
-                    yield {"type": "token", "text": piece["text"]}
+                    text = remove_em_dashes(piece["text"])
+                    pieces.append(text)
+                    yield {"type": "token", "text": text}
             reply = "".join(pieces).strip()
 
         except LLMError as error:
