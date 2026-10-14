@@ -1,7 +1,7 @@
 /*
   Styling for the chatbot interface.
 
-  Three decisions worth knowing, since they were made for the jury room:
+  Decisions worth knowing, since they were made for the jury room:
 
   1. Light background. Projectors wash out dark themes badly, and we do not
      control the room, so light with strong contrast is the safe choice.
@@ -9,9 +9,13 @@
   2. 16px base text, not the usual 14px. The panel has to stay readable from
      the back of a room.
 
-  3. Colour carries meaning, it does not decorate. Green means a fact is
-     current, amber means it has been replaced, grey means it is a raw
-     conversation line. Nothing is coloured for looks alone.
+  3. Colour carries meaning, it does not decorate. Each emotion has one colour
+     (below), used everywhere that emotion appears: the tag under a message,
+     the line under the header, the timeline dot. Learn it once, read it
+     everywhere.
+
+  4. Little on screen at once. The right panel tells one story in three
+     numbered steps, which is the order we explain it in during the demo.
 */
 
 /* ---------------------------------------------------------------- tokens */
@@ -28,36 +32,34 @@
   --accent:      #2563eb;
   --accent-soft: #eff4ff;
 
-  /* meaning colours */
-  --active:      #047857;
-  --active-soft: #ecfdf5;
-  --replaced:    #b45309;
-  --replaced-soft:#fffbeb;
+  /* status colours */
+  --ok:          #047857;
+  --ok-soft:     #ecfdf5;
+  --warn:        #b45309;
+  --warn-soft:   #fffbeb;
+  --danger:      #be123c;
+  --danger-soft: #fff1f2;
   --neutral:     #6b7280;
 
-  --radius:      8px;
+  /* one colour per emotion */
+  --joy:         #f59e0b;
+  --sadness:     #3b82f6;
+  --anger:       #ef4444;
+  --fear:        #8b5cf6;
+  --surprise:    #14b8a6;
+  --disgust:     #65a30d;
+  /* "neutral" already exists above as grey */
+
+  --radius:      10px;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
 
 /*
-  Page height, and why it is done this way.
-
-  The page must always fit the window exactly: the header at the top, the
-  message box pinned at the bottom, and only the middle scrolling.
-
-  An earlier version set the body area to `calc(100vh - 62px)`, guessing the
-  header height. That guess was wrong (the real header is taller, and it grows
-  if the chips wrap), so the page ended up taller than the window and the
-  message box was pushed off the bottom of the screen.
-
-  The fix is to stop guessing. The body is a vertical flex column: the header
-  takes whatever height it needs, and the rest of the page takes exactly what
-  is left over.
-
-  `100dvh` rather than `100vh` measures the space actually visible, allowing
-  for browser toolbars and the Windows taskbar.
+  Page height: the header takes what it needs, the rest of the page takes
+  exactly what is left, and only the middle scrolls. 100dvh measures the
+  space actually visible, allowing for browser toolbars and the taskbar.
 */
 body {
   margin: 0;
@@ -74,7 +76,6 @@ body {
 
 /* ---------------------------------------------------------------- top bar */
 .topbar {
-  /* Take only the height the content needs, and never shrink. */
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -82,7 +83,7 @@ body {
   padding: 14px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: relative;         /* so the tech-stack panel can hang below it */
+  position: relative;
 }
 
 .identity h1 {
@@ -96,6 +97,17 @@ body {
   margin: 1px 0 0;
   font-size: 13px;
   color: var(--text-faint);
+}
+
+/* Follows the user's current emotion. Fades between colours. */
+.mood-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: var(--border);
+  transition: background 0.8s ease;
 }
 
 .status-group { display: flex; gap: 8px; margin-left: auto; }
@@ -114,8 +126,6 @@ body {
 .controls { display: flex; gap: 8px; }
 
 /* ------------------------------------------------------- tech stack menu */
-/* A small button that opens a panel explaining what each part of the system
-   does. Kept out of the header itself so the header stays uncluttered. */
 .stack-menu { position: relative; }
 
 .stack-toggle {
@@ -135,8 +145,6 @@ body {
 
 .stack-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
-/* The arrow points down when closed and up when open, so the button always
-   shows what clicking it will do. */
 .chevron { font-size: 10px; line-height: 1; }
 .stack-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 
@@ -145,7 +153,7 @@ body {
   top: calc(100% + 8px);
   right: 0;
   z-index: 20;
-  width: 380px;
+  width: 400px;
   background: var(--surface);
   border: 1px solid var(--border-firm);
   border-radius: var(--radius);
@@ -155,33 +163,16 @@ body {
 
 .stack-row {
   display: grid;
-  grid-template-columns: 108px 1fr;
+  grid-template-columns: 112px 1fr;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 6px;
   font-size: 13px;
 }
 
 .stack-row + .stack-row { border-top: 1px solid var(--border); }
-
-.stack-part {
-  color: var(--text-soft);
-  font-weight: 600;
-}
-
-.stack-value {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.stack-purpose {
-  grid-column: 2;
-  color: var(--text-faint);
-  font-size: 12.5px;
-  margin-top: 2px;
-}
+.stack-part { color: var(--text-soft); font-weight: 600; }
+.stack-value { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.stack-purpose { grid-column: 2; color: var(--text-faint); font-size: 12.5px; margin-top: 2px; }
 
 /* ---------------------------------------------------------------- buttons */
 .button {
@@ -194,31 +185,24 @@ body {
   border-radius: var(--radius);
   padding: 8px 15px;
   cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 .button:hover { border-color: var(--accent); color: var(--accent); }
+.button:disabled { opacity: 0.5; cursor: default; }
 
-.button-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+.button-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .button-primary:hover { background: #1d4ed8; color: #fff; }
 
 .button-quiet { color: var(--text-soft); }
-.button-quiet:hover { border-color: var(--replaced); color: var(--replaced); }
+.button-quiet:hover { border-color: var(--warn); color: var(--warn); }
 
 /* ---------------------------------------------------------------- layout */
 .layout {
-  /* Take all the space the header did not use.
-     min-height: 0 is the important part. Without it a flex child refuses to
-     shrink below its content, so the inner areas never scroll and the page
-     grows instead - which is exactly what pushed the message box off screen. */
   flex: 1 1 auto;
-  min-height: 0;
-
+  min-height: 0;              /* lets the inner areas scroll instead of growing */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 430px;
+  grid-template-columns: minmax(0, 1fr) 400px;
 }
 
 @media (max-width: 1024px) {
@@ -231,11 +215,9 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 0;              /* lets the transcript scroll, see .layout above */
-  background: var(--page);
+  min-height: 0;
 }
 
-/* The only part of the page that scrolls. */
 .transcript {
   flex: 1 1 auto;
   min-height: 0;
@@ -243,47 +225,88 @@ body {
   padding: 26px 30px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
-.bubble {
+/* Welcome screen, shown until the first message. */
+.welcome {
+  margin: auto;
+  text-align: center;
+  max-width: 520px;
+  animation: rise 0.5s ease both;
+}
+
+.welcome h2 { margin: 0 0 6px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.welcome p  { margin: 0 0 22px; color: var(--text-soft); }
+
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+.suggestion {
+  font: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-firm);
+  border-radius: 99px;
+  padding: 7px 15px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.suggestion:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+/* One message: the bubble plus a small tag underneath. */
+.msg {
+  display: flex;
+  flex-direction: column;
   max-width: 74%;
+  animation: rise 0.25s ease both;
+}
+
+.msg-user { align-self: flex-end; align-items: flex-end; }
+.msg-bot  { align-self: flex-start; align-items: flex-start; }
+
+.bubble {
   padding: 11px 16px;
-  border-radius: 14px;
+  border-radius: 16px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .bubble-user {
-  align-self: flex-end;
   background: var(--accent);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
 
 .bubble-bot {
-  align-self: flex-start;
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
 }
 
-/* While the model is reasoning, before any words exist yet. It reasons for
-   about three seconds before it starts writing, so this state is worth
-   showing clearly rather than leaving the bubble looking finished. */
+/* The tag fades in when the server sends the emotion or the tone. */
+.msg-tag {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.msg-tag.shown { opacity: 1; }
+
+/* While the model reads and reasons, before any words exist yet. */
 .bubble.waiting {
   color: var(--text-soft);
   font-style: italic;
   animation: breathe 1.4s ease-in-out infinite;
 }
 
-@keyframes breathe {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
-}
-
-/* A blinking block after the last character while text is still arriving,
-   so it is obvious the reply is not finished. */
+/* A blinking block after the last character while text is still arriving. */
 .bubble.streaming::after {
   content: "";
   display: inline-block;
@@ -295,13 +318,40 @@ body {
   animation: caret 1s step-end infinite;
 }
 
-@keyframes caret {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0; }
+/* The crisis reply. Calm, not alarming: soft colour, large numbers. */
+.bubble-safety {
+  background: var(--danger-soft);
+  border: 1px solid #fecdd3;
+  border-left: 4px solid var(--danger);
+  border-radius: 12px;
+  white-space: normal;
+  max-width: 460px;
 }
 
-/* System lines: session changes, deletions. Centred so they read as events
-   rather than as something either party said. */
+.bubble-safety p { margin: 6px 0 10px; }
+.safety-title { font-weight: 600; color: var(--danger); }
+.safety-foot { margin-bottom: 0 !important; color: var(--text-soft); }
+
+.helpline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.helpline-number {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--danger);
+  min-width: 72px;
+}
+
+/* System lines: session changes, deletions. */
 .notice {
   align-self: center;
   max-width: 80%;
@@ -314,7 +364,6 @@ body {
   padding: 6px 18px;
 }
 
-/* Pinned to the bottom: never shrinks, never scrolls away. */
 .composer {
   flex: 0 0 auto;
   display: flex;
@@ -335,36 +384,76 @@ body {
   outline: none;
 }
 
-.message-input:focus {
-  border-color: var(--accent);
-  background: var(--surface);
+.message-input:focus { border-color: var(--accent); background: var(--surface); }
+
+/* ------------------------------------------------------- emotion colours */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--neutral);
+  flex: 0 0 auto;
 }
 
-/* ---------------------------------------------------------------- panel */
+.dot-joy,      .fill-joy      { background: var(--joy); }
+.dot-sadness,  .fill-sadness  { background: var(--sadness); }
+.dot-anger,    .fill-anger    { background: var(--anger); }
+.dot-fear,     .fill-fear     { background: var(--fear); }
+.dot-surprise, .fill-surprise { background: var(--surprise); }
+.dot-disgust,  .fill-disgust  { background: var(--disgust); }
+.dot-neutral,  .fill-neutral  { background: var(--neutral); }
+
+/* ------------------------------------------------------- right panel */
 .inspector {
-  min-height: 0;              /* scrolls on its own, independently of the chat */
+  min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--surface);
   overflow-y: auto;
-  padding: 20px;
+  padding: 20px 22px;
 }
 
-.panel { margin-bottom: 26px; }
+.inspector-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
 
-.panel-title {
-  margin: 0 0 10px;
+.step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+/* Steps slide in one after another when a new message is read. */
+.step.reveal { animation: rise 0.35s ease both; }
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-soft);
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
 }
 
 .panel-note {
+  margin-left: auto;
   text-transform: none;
   letter-spacing: 0;
   font-weight: 400;
@@ -372,118 +461,195 @@ body {
   color: var(--text-faint);
 }
 
-.empty-note {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-faint);
+.empty-note { margin: 0; font-size: 14px; color: var(--text-faint); }
+.muted { font-size: 12px; color: var(--text-faint); }
+
+/* Grey placeholder while the server is working. */
+.skeleton {
+  height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--page) 0%, var(--border) 50%, var(--page) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
 }
 
-/* ---------------------------------------------------------------- stats */
-.stat-grid {
+/* Step 1: emotion */
+.emotion-main { display: flex; align-items: center; gap: 14px; }
+
+.emotion-face {
+  font-size: 34px;
+  line-height: 1;
+  width: 54px;
+  height: 54px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.stat {
+  place-items: center;
+  border-radius: 50%;
   background: var(--page);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 6px;
-  text-align: center;
 }
 
-.stat-value {
-  display: block;
-  font-size: 21px;
+.emotion-text { flex: 1; }
+
+.emotion-label {
+  font-size: 20px;
   font-weight: 600;
+  text-transform: capitalize;
   line-height: 1.2;
-  font-variant-numeric: tabular-nums;
 }
 
-.stat-label {
-  display: block;
-  font-size: 11px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* ---------------------------------------------------------------- cards */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--neutral);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-/* A card for an extracted fact. */
-.card-fact { border-left-color: var(--active); }
-
-/* A card for a raw conversation line. */
-.card-message { border-left-color: var(--neutral); }
-
-.card-text { overflow-wrap: anywhere; }
-
-.card-meta {
-  margin-top: 6px;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-/* The similarity bar. Its width is the score, so relative strength is
-   visible at a glance without reading the numbers. */
-.score-bar {
-  height: 4px;
+.bar {
+  height: 6px;
   background: var(--border);
   border-radius: 99px;
-  margin-top: 7px;
+  margin: 6px 0 3px;
   overflow: hidden;
 }
 
-.score-fill {
+.bar-fill {
   display: block;
   height: 100%;
-  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.6s ease;
 }
 
-/* ------------------------------------------------------- contradictions */
-.contradiction {
-  background: var(--replaced-soft);
-  border: 1px solid #fcd9a4;
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  margin-bottom: 8px;
+.readers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.reader {
+  display: flex;
+  flex-direction: column;
+  background: var(--page);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.reader b { font-size: 14px; color: var(--text); text-transform: capitalize; }
+
+.pill {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 9px;
+}
+
+.pill-ok     { background: var(--ok-soft);     color: var(--ok); }
+.pill-warn   { background: var(--warn-soft);   color: var(--warn); }
+.pill-danger { background: var(--danger-soft); color: var(--danger); }
+.pill-info   { background: var(--page);        color: var(--text-soft); }
+
+/* Step 2: tone */
+.tone-name { font-size: 18px; font-weight: 600; }
+
+.tone-instruction {
+  margin: 4px 0 10px;
+  font-size: 13.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+/* Step 3: memory */
+.memory-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.contradiction-head {
-  font-weight: 600;
-  color: var(--replaced);
-  margin-bottom: 4px;
+.memory-row:last-child { border-bottom: none; }
+.new-fact { color: var(--ok); }
+
+.change {
+  font-size: 14px;
+  background: var(--warn-soft);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
 }
 
-.old-value {
-  text-decoration: line-through;
+.old-value { text-decoration: line-through; color: var(--text-faint); }
+
+/* ----------------------------------------------------------- timeline */
+.timeline-panel { margin: 20px 0 16px; }
+
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.dot-big {
+  width: 14px;
+  height: 14px;
+  cursor: default;
+  transition: transform 0.15s;
+}
+
+.dot-new { animation: pop 0.3s ease both; }
+
+.dot-big:hover { transform: scale(1.4); }
+
+/* A crisis turn gets a ring, so it stands out in the history. */
+.dot-crisis { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--danger); }
+
+.session-mark {
+  font-family: var(--mono);
+  font-size: 10.5px;
   color: var(--text-faint);
+  margin: 0 2px 0 6px;
 }
 
-.new-value { font-weight: 600; }
+.session-mark:first-child { margin-left: 0; }
 
-/* ---------------------------------------------------------- memory list */
-.memory-list {
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 2px;
+/* ------------------------------------------------------- memory store */
+.store {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.store summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  display: flex;
+  gap: 8px;
+}
+
+.memory-list { max-height: 300px; overflow-y: auto; margin-top: 10px; }
+
+.card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--neutral);
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 7px;
+  font-size: 13.5px;
+}
+
+.card-fact { border-left-color: var(--ok); }
+.card-text { overflow-wrap: anywhere; }
+
+.card-meta {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
 }
 
 .tag {
   display: inline-block;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -493,8 +659,39 @@ body {
   vertical-align: 1px;
 }
 
-.tag-active    { background: var(--active-soft);   color: var(--active); }
-.tag-superseded{ background: var(--replaced-soft); color: var(--replaced); }
-.tag-pruned    { background: var(--page);          color: var(--text-faint); }
+.tag-active     { background: var(--ok-soft);   color: var(--ok); }
+.tag-superseded { background: var(--warn-soft); color: var(--warn); }
+.tag-pruned     { background: var(--page);      color: var(--text-faint); }
 
-.privacy-flag { color: var(--active); font-weight: 600; }
+.privacy-flag { color: var(--ok); font-weight: 600; }
+
+/* ---------------------------------------------------------- animations */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+@keyframes caret {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Respect people who have asked their system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

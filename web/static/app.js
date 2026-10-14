@@ -1,10 +1,11 @@
 /*
   Browser-side code for the interface.
 
-  It does three things:
+  It does four things:
     - sends what the user types to the server
-    - shows the reply
-    - fills the right-hand panel with what the memory system did
+    - shows the reply as it streams in
+    - fills the "Why this reply" panel: emotion, tone, memory
+    - draws the mood timeline and the memory store
 
   Written as plain JavaScript with no framework, so there is nothing between
   what is written here and what the browser runs.
@@ -22,16 +23,45 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+// One emoji per emotion. The colours live in style.css (--joy, --sadness...).
+const EMOJI = {
+  joy: "\u{1F60A}", sadness: "\u{1F622}", anger: "\u{1F620}", fear: "\u{1F628}",
+  surprise: "\u{1F62E}", disgust: "\u{1F922}", neutral: "\u{1F610}",
+};
+
+function percent(value) {
+  return Math.round((value || 0) * 100) + "%";
+}
+
 
 /* ------------------------------------------------------------- transcript */
 
-function addBubble(text, who) {
+// Each message is a row holding the bubble and a small tag underneath it.
+// The tag is filled in later (the emotion, or the tone used).
+function addMessage(text, who) {
+  const welcome = el("welcome");
+  if (welcome) welcome.remove();
+
+  const row = document.createElement("div");
+  row.className = "msg msg-" + who;
+
   const bubble = document.createElement("div");
   bubble.className = "bubble bubble-" + who;
   bubble.textContent = text;          // textContent, so no HTML is interpreted
-  el("transcript").appendChild(bubble);
+
+  const tag = document.createElement("div");
+  tag.className = "msg-tag";
+
+  row.appendChild(bubble);
+  row.appendChild(tag);
+  el("transcript").appendChild(row);
   scrollToBottom();
-  return bubble;
+  return { row: row, bubble: bubble, tag: tag };
+}
+
+function setTag(tag, html) {
+  tag.innerHTML = html;
+  tag.classList.add("shown");
 }
 
 function addNotice(text) {
@@ -47,11 +77,27 @@ function scrollToBottom() {
   transcript.scrollTop = transcript.scrollHeight;
 }
 
+// In a crisis the reply is not a normal chat bubble. It is a calm card with
+// the helpline numbers large enough to read at a glance.
+function showSafetyCard(bubble, helplines) {
+  bubble.className = "bubble bubble-safety";
+  bubble.innerHTML = `
+    <div class="safety-title">You don't have to go through this alone.</div>
+    <p>I'm really sorry you're feeling this way, and I'm glad you told me.
+       Please talk to someone who can help right now:</p>
+    ${helplines.map((h) => `
+      <div class="helpline">
+        <span class="helpline-number">${escapeHtml(h.number)}</span>
+        <span><b>${escapeHtml(h.name)}</b><br><small>${escapeHtml(h.note)}</small></span>
+      </div>`).join("")}
+    <p class="safety-foot">I'm still here if you want to keep talking.</p>`;
+}
+
 
 /* ----------------------------------------------------------- sending text */
 
 async function sendMessage(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
 
   const input = el("messageInput");
   const message = input.value.trim();
@@ -63,45 +109,59 @@ async function sendMessage(event) {
     return forgetTopic(message.slice(8).trim(), message);
   }
 
-  addBubble(message, "user");
+  const user = addMessage(message, "user");
 
-  // The bubble starts empty and fills up as the reply arrives.
-  const bubble = addBubble("thinking...", "bot");
-  bubble.classList.add("waiting");
+  // The bot bubble starts with a placeholder and fills up as the reply arrives.
+  const bot = addMessage("reading your message...", "bot");
+  bot.bubble.classList.add("waiting");
   el("btnSend").disabled = true;
+  showPanelLoading();
 
-  // Set to true by the first piece of real text, which is when we clear the
-  // "thinking..." placeholder out of the bubble.
   let replyStarted = false;
+  let isCrisis = false;
   let text = "";
 
   function addText(piece) {
+    if (isCrisis) return;             // the safety card is already showing
     if (!replyStarted) {
       replyStarted = true;
-      bubble.classList.remove("waiting");
-      bubble.classList.add("streaming");
-      bubble.textContent = "";
+      bot.bubble.classList.remove("waiting");
+      bot.bubble.classList.add("streaming");
+      bot.bubble.textContent = "";
     }
     text += piece;
-    bubble.textContent = text;
+    bot.bubble.textContent = text;
     scrollToBottom();
   }
 
   // One event from the server. See send_stream in chat_engine.py for the list.
   function handleEvent(event) {
     if (event.type === "context") {
-      // Memory results arrive before the reply is written, so the panel on
-      // the right fills in while the model is still thinking.
-      renderRetrieved(event.details.memories_used);
-      renderContradictions(event.details.contradictions);
+      // The analysis arrives before the reply is written, so the user's
+      // emotion and the chosen tone appear while the model is still thinking.
+      const d = event.details;
+      const mood = d.mood;
+      setTag(user.tag, `<span class="dot dot-${mood.emotion}"></span>
+                        ${mood.emotion} &middot; ${percent(mood.confidence)}`);
+      setMoodLine(mood.emotion);
+      renderPanel(d);
+
+      if (d.safety.level === 2) {
+        isCrisis = true;
+        showSafetyCard(bot.bubble, d.helplines);
+      } else {
+        bot.bubble.textContent = "thinking in a " + d.tone.name.toLowerCase() + " tone...";
+      }
     } else if (event.type === "token") {
       addText(event.text);
     } else if (event.type === "done") {
-      showTurnDetails(event.details);
+      text = text || event.reply;
+      const tone = event.details.tone;
+      if (tone && !isCrisis) setTag(bot.tag, "tone: " + escapeHtml(tone.name));
+      if (isCrisis) setTag(bot.tag, "fixed safe reply &middot; no AI generation");
     } else if (event.type === "error") {
       addText("\n\nError: " + event.error);
     }
-    // "thinking" needs no action. The placeholder is already showing.
   }
 
   try {
@@ -139,8 +199,8 @@ async function sendMessage(event) {
   } catch (error) {
     addText("\n\nCould not reach the server: " + error);
   } finally {
-    bubble.classList.remove("waiting", "streaming");
-    if (!text) bubble.textContent = "No reply came back.";
+    bot.bubble.classList.remove("waiting", "streaming");
+    if (!text && !isCrisis) bot.bubble.textContent = "No reply came back.";
     el("btnSend").disabled = false;
     loadMemories();
     input.focus();
@@ -148,92 +208,142 @@ async function sendMessage(event) {
 }
 
 
-/* ------------------------------------------------- right-hand side panel */
+/* ------------------------------------------- the "Why this reply" panel */
 
-function showTurnDetails(details) {
-  if (!details) return;
-
-  renderRetrieved(details.memories_used);
-  renderContradictions(details.contradictions);
-  renderStatistics(details.summary);
+function showPanelLoading() {
+  ["emotionBox", "toneBox", "memoryBox"].forEach(function (id) {
+    el(id).innerHTML = '<div class="skeleton"></div>';
+  });
 }
 
-// Which memories were used for this message, and how strongly each matched.
-function renderRetrieved(memories) {
-  const container = el("retrievedList");
+function renderPanel(details) {
+  renderEmotion(details.mood);
+  renderTone(details.tone, details.safety);
+  renderMemory(details);
 
-  if (!memories || memories.length === 0) {
-    container.innerHTML =
-      '<p class="empty-note">Nothing scored above the similarity threshold.</p>';
+  // Let the three steps appear one after another, in pipeline order.
+  ["stepEmotion", "stepTone", "stepMemory"].forEach(function (id, i) {
+    const step = el(id);
+    step.classList.remove("reveal");
+    void step.offsetWidth;            // restart the animation
+    step.style.animationDelay = (i * 120) + "ms";
+    step.classList.add("reveal");
+  });
+}
+
+// Step 1: the final emotion, and what each of the two readers said.
+function renderEmotion(mood) {
+  const verdicts = {
+    "agree":      ["ok",   "Both agree"],
+    "disagree":   ["warn", "Disagree &rarr; LLM used (reads context)"],
+    "local only": ["info", "Local model only (LLM unavailable)"],
+    "llm only":   ["info", "LLM only (local model unavailable)"],
+    "llm skipped": ["danger", "LLM skipped: crisis rules took over"],
+  };
+  const verdict = verdicts[mood.agreement] || ["info", "No signal"];
+  const local = mood.local || {};
+
+  el("emotionBox").innerHTML = `
+    <div class="emotion-main">
+      <span class="emotion-face face-${mood.emotion}">${EMOJI[mood.emotion] || ""}</span>
+      <div class="emotion-text">
+        <div class="emotion-label">${escapeHtml(mood.emotion)}</div>
+        <div class="bar"><span class="bar-fill fill-${mood.emotion}"
+             style="width:${percent(mood.confidence)}"></span></div>
+        <div class="muted">confidence ${percent(mood.confidence)}</div>
+      </div>
+    </div>
+    <div class="readers">
+      <div class="reader"><span>Local model</span>
+        <b>${escapeHtml(local.label || "-")}</b>
+        <span class="muted">${local.label ? percent(local.score) : ""}</span></div>
+      <div class="reader"><span>LLM</span>
+        <b>${escapeHtml(mood.llm || "-")}</b><span></span></div>
+    </div>
+    <div class="pill pill-${verdict[0]}">${verdict[1]}</div>`;
+}
+
+// Step 2: the tone and the safety level that shaped it.
+function renderTone(tone, safety) {
+  const levelClass = ["ok", "warn", "danger"][safety.level];
+  el("toneBox").innerHTML = `
+    <div class="tone-name">${escapeHtml(tone.name)}</div>
+    <p class="tone-instruction">&ldquo;${escapeHtml(tone.instruction)}&rdquo;</p>
+    <div class="pill pill-${levelClass}">
+      Safety: ${escapeHtml(safety.name)} &middot; ${escapeHtml(safety.reason)}
+    </div>`;
+}
+
+// Step 3: memories retrieved for this message, plus any fact that changed.
+function renderMemory(details) {
+  const box = el("memoryBox");
+
+  if (details.safety.level === 2) {
+    box.innerHTML = '<p class="empty-note">Skipped. A crisis message is not ' +
+                    'stored or searched.</p>';
     return;
   }
 
-  container.innerHTML = memories.map(function (memory) {
-    const isFact = memory.type === "semantic";
-    const barWidth = Math.max(3, Math.min(100, memory.similarity * 100));
+  let html = "";
 
-    return `
-      <div class="card ${isFact ? "card-fact" : "card-message"}">
-        <div class="card-text">${escapeHtml(memory.text)}</div>
-        <div class="score-bar">
-          <span class="score-fill" style="width:${barWidth}%"></span>
-        </div>
-        <div class="card-meta">
-          ${memory.id} &middot; ${isFact ? "fact" : "message"} &middot;
-          similarity ${memory.similarity} &middot;
-          recency ${memory.recency} &middot;
-          final ${memory.score}
-        </div>
+  (details.contradictions || []).forEach(function (item) {
+    html += `
+      <div class="change">
+        ${escapeHtml(item.key)}:
+        <span class="old-value">${escapeHtml(item.old_value)}</span> &rarr;
+        <b>${escapeHtml(item.new_value)}</b>
       </div>`;
-  }).join("");
+  });
+
+  (details.facts_found || []).forEach(function (fact) {
+    html += `<div class="memory-row new-fact">
+               <span>+ learned <b>${escapeHtml(fact.key)}: ${escapeHtml(fact.value)}</b></span>
+             </div>`;
+  });
+
+  (details.memories_used || []).forEach(function (memory) {
+    html += `
+      <div class="memory-row">
+        <span>${escapeHtml(memory.text)}</span>
+        <span class="muted">${memory.similarity.toFixed(2)}</span>
+      </div>`;
+  });
+
+  box.innerHTML = html || '<p class="empty-note">Nothing relevant in memory yet.</p>';
 }
 
-// Facts that replaced an earlier version. New entries are added at the top and
-// earlier ones are kept, so the whole demo's history stays visible.
-function renderContradictions(contradictions) {
-  if (!contradictions || contradictions.length === 0) return;
-
-  const container = el("contradictionList");
-
-  // Clear the placeholder the first time something real arrives.
-  const placeholder = container.querySelector(".empty-note");
-  if (placeholder) placeholder.remove();
-
-  const html = contradictions.map(function (item) {
-    return `
-      <div class="contradiction">
-        <div class="contradiction-head">${escapeHtml(item.key)} updated</div>
-        <span class="old-value">${escapeHtml(item.old_value)}</span>
-        &rarr;
-        <span class="new-value">${escapeHtml(item.new_value)}</span>
-        <div class="card-meta">
-          ${item.old_id} marked superseded &middot; ${item.new_id} now active
-        </div>
-      </div>`;
-  }).join("");
-
-  container.insertAdjacentHTML("afterbegin", html);
+// The thin coloured line under the header follows the current emotion.
+function setMoodLine(emotion) {
+  el("moodLine").style.background = "var(--" + emotion + ")";
 }
 
-function renderStatistics(summary) {
-  if (!summary) return;
 
-  const tiles = [
-    ["facts",      "Facts"],
-    ["messages",   "Messages"],
-    ["superseded", "Replaced"],
-    ["pruned",     "Pruned"],
-    ["sessions",   "Sessions"],
-    ["total",      "Total"],
-  ];
+/* --------------------------------------------------------- mood timeline */
 
-  el("statGrid").innerHTML = tiles.map(function (pair) {
-    const value = summary[pair[0]] || 0;
-    return `<div class="stat">
-              <span class="stat-value">${value}</span>
-              <span class="stat-label">${pair[1]}</span>
-            </div>`;
-  }).join("");
+function renderTimeline(moods) {
+  const box = el("timeline");
+  if (!moods || moods.length === 0) {
+    box.innerHTML = '<p class="empty-note">No moods recorded yet.</p>';
+    return;
+  }
+
+  let html = "";
+  let lastSession = null;
+
+  moods.forEach(function (m, i) {
+    // A small gap and label where a new session begins.
+    if (m.session_id !== lastSession) {
+      html += `<span class="session-mark">${escapeHtml(m.session_id.replace("session-", "S"))}</span>`;
+      lastSession = m.session_id;
+    }
+    const tip = m.time.slice(0, 16).replace("T", " ") + " - " + m.emotion +
+                (m.reason ? " (" + m.reason + ")" : "");
+    let flags = m.safety_level === 2 ? " dot-crisis" : "";
+    if (i === moods.length - 1) flags += " dot-new";   // only the newest one pops in
+    html += `<span class="dot dot-big dot-${m.emotion}${flags}" title="${escapeHtml(tip)}"></span>`;
+  });
+
+  box.innerHTML = html;
 }
 
 
@@ -243,7 +353,7 @@ async function loadMemories() {
   const response = await fetch("/api/memories");
   const data = await response.json();
 
-  renderStatistics(data.summary);
+  renderTimeline(data.moods);
   el("storeCount").textContent = data.memories.length + " records";
 
   const container = el("memoryList");
@@ -276,7 +386,7 @@ async function loadMemories() {
 /* ------------------------------------------------------------- controls */
 
 async function forgetTopic(topic, originalText) {
-  addBubble(originalText, "user");
+  addMessage(originalText, "user");
 
   const response = await fetch("/api/forget", {
     method: "POST",
@@ -289,13 +399,12 @@ async function forgetTopic(topic, originalText) {
     "Deleted " + data.removed.length + " record(s) about \"" + topic +
     "\". This is a permanent removal, not a replacement."
   );
-  renderStatistics(data.summary);
   loadMemories();
 }
 
 async function startNewSession() {
-  // The server decides the name. It can see which sessions already exist, so
-  // the numbering runs session-1, session-2, session-3 in order.
+  // The server decides the name, because only it can see which sessions
+  // already exist.
   const response = await fetch("/api/session/new", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -307,13 +416,13 @@ async function startNewSession() {
   el("transcript").innerHTML = "";
   addNotice(
     "Started " + data.session_id + ". Recent messages cleared - anything the " +
-    "assistant recalls from here came out of the database."
+    "bot remembers from here, including how you felt, came from the database."
   );
 }
 
 async function resetEverything() {
   const confirmed = confirm(
-    "Permanently delete every stored memory?\n\nThis cannot be undone."
+    "Permanently delete every stored memory and mood?\n\nThis cannot be undone."
   );
   if (!confirmed) return;
 
@@ -325,11 +434,12 @@ async function resetEverything() {
   const data = await response.json();
 
   el("transcript").innerHTML = "";
-  el("contradictionList").innerHTML =
-    '<p class="empty-note">No contradictions yet.</p>';
-  el("retrievedList").innerHTML =
-    '<p class="empty-note">Nothing retrieved yet.</p>';
-  addNotice("Deleted " + data.deleted + " memories. Starting fresh.");
+  el("chipSession").textContent = "session-1";
+  el("emotionBox").innerHTML = '<p class="empty-note">Send a message to see how it is read.</p>';
+  el("toneBox").innerHTML = '<p class="empty-note">Waiting for a message.</p>';
+  el("memoryBox").innerHTML = '<p class="empty-note">Waiting for a message.</p>';
+  el("moodLine").style.background = "";
+  addNotice("Deleted " + data.deleted + " memories and the mood history. Starting fresh.");
   loadMemories();
 }
 
@@ -345,6 +455,14 @@ el("messageInput").addEventListener("keydown", function (event) {
     event.preventDefault();
     sendMessage(event);
   }
+});
+
+// The suggestion chips on the welcome screen send their text as a message.
+document.querySelectorAll(".suggestion").forEach(function (chip) {
+  chip.addEventListener("click", function () {
+    el("messageInput").value = chip.dataset.text;
+    sendMessage();
+  });
 });
 
 el("btnNewSession").addEventListener("click", startNewSession);
@@ -380,10 +498,7 @@ el("stackMenu").addEventListener("mouseleave", function () {
   setStackOpen(false);
 });
 
-
-/* ------------------------------------------------------------- start-up */
-
-// Fill the panel with the current state as soon as the page opens.
+// Fill in the current state as soon as the page opens.
 fetch("/api/status")
   .then((response) => response.json())
   .then(function (status) {

@@ -1,0 +1,38 @@
+SENTIMENT AND SAFETY EVALUATION
+(evaluation/evaluate_sentiment.py --llm, run 2026-10-14)
+----------------------------------------------------------------------
+1. EMOTION ACCURACY  (42 messages, 7 of them hard)
+----------------------------------------------------------------------
+  Local model alone      35/42 =  83.3%    macro-F1 0.834    hard cases 2/7
+  LLM alone              41/42 =  97.6%    macro-F1 0.976    hard cases 7/7
+  Combined (used by bot) 41/42 =  97.6%    macro-F1 0.976    hard cases 7/7
+
+----------------------------------------------------------------------
+2. CONFUSION MATRIX  (combined)
+----------------------------------------------------------------------
+  rows = correct emotion, columns = what was predicted
+              joy  sadn  ange  fear  surp  disg  neut
+  joy           6     .     .     .     .     .     .
+  sadness       .     6     .     .     .     .     .
+  anger         .     .     6     .     .     .     .
+  fear          .     .     .     6     .     .     .
+  surprise      1     .     .     .     5     .     .
+  disgust       .     .     .     .     .     6     .
+  neutral       .     .     .     .     .     .     6
+
+  Local model got these wrong:
+      joy       -> surprise  Not gonna lie, today went way better than I expected
+      sadness   -> surprise  Nobody remembered my birthday this year
+      sadness   -> joy       Great, another rejection email. Just what I needed.
+      anger     -> neutral   Oh sure, cancel the class AFTER I travelled an hour
+      fear      -> surprise  My heart is racing, results come out in an hour
+      surprise  -> disgust   No way, my old school friend joined my company
+      surprise  -> anger     Hold on, they're giving everyone a week off?
+  Combined got these wrong:
+      surprise  -> joy       No way, my old school friend joined my company
+
+----------------------------------------------------------------------
+3. SAFETY RULES  (fixed rules only, no LLM)
+----------------------------------------------------------------------
+  Crisis recall   10/10   OK
+  False alarms    0/8   OK

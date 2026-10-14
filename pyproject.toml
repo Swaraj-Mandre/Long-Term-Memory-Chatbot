@@ -1,7 +1,7 @@
 [project]
 name = "long-term-memory-chatbot"
 version = "0.1.0"
-description = "Chatbot with Long-Term Memory - Generative AI jury project, Topic 192"
+description = "Sentiment-Aware Chatbot with Long-Term Memory - Generative AI Jury 2, PS 96"
 requires-python = ">=3.11"
 
 dependencies = [
@@ -19,6 +19,9 @@ dependencies = [
 
     # Required by sentence-transformers to run the model.
     "torch>=2.13.0",
+
+    # Runs the local emotion model.
+    "transformers>=5.0.0",
 
     # Reads the API key from the .env file.
     "python-dotenv>=1.0.0",

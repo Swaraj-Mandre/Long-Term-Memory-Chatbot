@@ -122,7 +122,24 @@ MAX_EPISODIC_MEMORIES = 100
 
 
 # ---------------------------------------------------------------------------
-# 5. Web interface
+# 5. Emotion detection (Jury 2, PS 96)
+# ---------------------------------------------------------------------------
+# A small local model that reads a message and scores it against 7 emotions:
+# joy, sadness, anger, fear, surprise, disgust, neutral. It runs on this
+# machine like the embedding model, takes about 50 ms, and downloads once
+# (about 330 MB).
+EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
+
+# If the local model is less sure than this, and the LLM could not give a
+# second opinion, we treat the message as neutral rather than guess.
+EMOTION_MIN_CONFIDENCE = 0.50
+
+# How many negative messages in a row before the bot gently checks in.
+CONCERN_STREAK = 3
+
+
+# ---------------------------------------------------------------------------
+# 6. Web interface
 # ---------------------------------------------------------------------------
 
 WEB_HOST = "127.0.0.1"
@@ -150,7 +167,7 @@ def check_configuration():
 
 
 # ---------------------------------------------------------------------------
-# 6. Console debug output
+# 7. Console debug output
 # ---------------------------------------------------------------------------
 # When this is on, every turn prints what actually happened to the terminal:
 # the exact request sent to the model, its raw reply and internal reasoning,

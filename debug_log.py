@@ -5,8 +5,10 @@ Turn it on or off with DEBUG_LOG in config.py, or DEBUG=true in your .env file.
 
 When it is on, every turn prints:
 
-  1. the message sent to the model to extract facts, and its raw reply
-  2. every fact written, and any older fact that was replaced
+  1. the message sent to the model to read facts and emotion, and its raw reply
+  1b. what the local emotion model and the LLM each said, and the final emotion
+  2. the safety level and the tone chosen
+  2b. every fact written, and any older fact that was replaced
   3. the search: the cleaned query, the candidates, and how each was scored
   4. the full prompt used to write the reply, including the injected memories
   5. token usage
@@ -194,6 +196,27 @@ def memory_write(record, replaced):
         old = replaced["metadata"]
         safe_write("  REPLACED       %s = %s   (%s now superseded by %s)" % (
             old["key"], old["value"], replaced["id"], record["id"]))
+
+
+def emotion(local, llm_label, mood):
+    """What each reader thought, and the final decision."""
+    if not _enabled():
+        return
+    if local:
+        top = sorted(local["scores"].items(), key=lambda pair: -pair[1])[:3]
+        field("local model", "  ".join("%s=%.2f" % pair for pair in top))
+    else:
+        field("local model", "(unavailable)")
+    field("llm says", llm_label or "(not asked or unavailable)")
+    field("final emotion", "%s  confidence=%.2f  (%s)" % (
+        mood["emotion"], mood["confidence"], mood["agreement"]))
+
+
+def safety(result, tone):
+    if not _enabled():
+        return
+    field("safety level", "%d %s  - %s" % (result["level"], result["name"], result["reason"]))
+    field("tone chosen", tone["name"])
 
 
 def privacy(items):

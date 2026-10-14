@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chatbot with Long-Term Memory</title>
+  <title>Sentiment-Aware Chatbot</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
 <!-- Top bar: what is running, and the controls used during the demo -->
 <header class="topbar">
   <div class="identity">
-    <h1>Chatbot with Long-Term Memory</h1>
-    <p class="subtitle">Topic 192 &middot; Generative AI &middot; Model Making</p>
+    <h1>Sentiment-Aware Chatbot</h1>
+    <p class="subtitle">PS 96 &middot; Generative AI &middot; with long-term memory</p>
   </div>
 
   <div class="status-group">
@@ -30,9 +30,12 @@
   </div>
 
   <div class="controls">
-    <button id="btnNewSession" class="button">Start New Session</button>
+    <button id="btnNewSession" class="button">New Session</button>
     <button id="btnReset" class="button button-quiet">Wipe Memory</button>
   </div>
+
+  <!-- A thin line whose colour follows the user's current emotion. -->
+  <div class="mood-line" id="moodLine"></div>
 </header>
 
 <main class="layout">
@@ -40,9 +43,19 @@
   <!-- LEFT: the conversation -->
   <section class="chat-pane">
     <div class="transcript" id="transcript">
-      <div class="notice">
-        Memory loaded from disk. Tell the assistant something about yourself.
+
+      <!-- Shown until the first message. The chips are the demo script. -->
+      <div class="welcome" id="welcome">
+        <h2>How are you feeling today?</h2>
+        <p>The bot reads your emotion, adapts its tone, and remembers you across sessions.</p>
+        <div class="suggestions">
+          <button class="suggestion" data-text="I got selected for the Google internship!!">&#x1F60A; Good news</button>
+          <button class="suggestion" data-text="Great, I failed my DBMS exam again. Nothing I do ever works.">&#x1F622; A bad day</button>
+          <button class="suggestion" data-text="My roommate keeps eating my food and never apologises.">&#x1F620; Frustrated</button>
+          <button class="suggestion" data-text="I have my final interview tomorrow and I can't stop worrying.">&#x1F628; Worried</button>
+        </div>
       </div>
+
     </div>
 
     <form class="composer" id="composer">
@@ -50,48 +63,56 @@
         id="messageInput"
         class="message-input"
         type="text"
-        placeholder="Type a message, or /forget city to delete a topic"
+        placeholder="Type how you feel, or /forget city to delete a topic"
         autocomplete="off"
         autofocus>
       <button type="submit" class="button button-primary" id="btnSend">Send</button>
     </form>
   </section>
 
-  <!-- RIGHT: what the memory system did. This panel is the demonstration. -->
+  <!-- RIGHT: why the bot replied the way it did. This panel is the demo. -->
   <aside class="inspector">
 
-    <section class="panel">
-      <h2 class="panel-title">Memory Statistics</h2>
-      <div class="stat-grid" id="statGrid"></div>
-    </section>
+    <h2 class="inspector-title">Why this reply</h2>
 
-    <section class="panel">
-      <h2 class="panel-title">
-        Retrieved For This Message
-        <span class="panel-note">ranked by similarity</span>
-      </h2>
-      <div id="retrievedList">
-        <p class="empty-note">Nothing retrieved yet.</p>
+    <!-- Step 1: emotion -->
+    <section class="step" id="stepEmotion">
+      <div class="step-head"><span class="step-num">1</span> Emotion detected</div>
+      <div id="emotionBox">
+        <p class="empty-note">Send a message to see how it is read.</p>
       </div>
     </section>
 
-    <section class="panel">
-      <h2 class="panel-title">
-        Contradictions Resolved
-        <span class="panel-note">newer fact replaces older</span>
-      </h2>
-      <div id="contradictionList">
-        <p class="empty-note">No contradictions yet.</p>
+    <!-- Step 2: tone and safety -->
+    <section class="step" id="stepTone">
+      <div class="step-head"><span class="step-num">2</span> Tone chosen</div>
+      <div id="toneBox">
+        <p class="empty-note">Waiting for a message.</p>
       </div>
     </section>
 
-    <section class="panel">
-      <h2 class="panel-title">
-        Memory Store
-        <span class="panel-note" id="storeCount"></span>
-      </h2>
+    <!-- Step 3: memory -->
+    <section class="step" id="stepMemory">
+      <div class="step-head"><span class="step-num">3</span> Memory used</div>
+      <div id="memoryBox">
+        <p class="empty-note">Waiting for a message.</p>
+      </div>
+    </section>
+
+    <!-- How the user's mood has moved, across every session -->
+    <section class="timeline-panel">
+      <div class="step-head">
+        Mood over time
+        <span class="panel-note">hover a dot</span>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <!-- The full store from Jury 1. Folded away until someone asks. -->
+    <details class="store">
+      <summary>Memory store <span class="panel-note" id="storeCount"></span></summary>
       <div class="memory-list" id="memoryList"></div>
-    </section>
+    </details>
 
   </aside>
 </main>

@@ -1,7 +1,8 @@
-# Chatbot with Long-Term Memory
+# Sentiment-Aware Chatbot with Long-Term Memory
 
-A chatbot that actually remembers you. Close the program, reopen it a week later, and it still
-knows where you live, what you study and what you told it last time.
+A chatbot that notices how you feel, changes how it talks to match, and remembers you. Close the
+program, reopen it a week later, and it still knows where you live, what you study, and that you
+were worried about an exam last time.
 
 <p>
 <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-1E2761">
@@ -10,8 +11,52 @@ knows where you live, what you study and what you told it last time.
 <img alt="LLM" src="https://img.shields.io/badge/LLM-DeepSeek%20v4%20Flash-B45309">
 </p>
 
-> **Generative AI mini project. Topic 192, Model Making.**
+> **Generative AI mini project.** Jury 1: Topic 192, Chatbot with Long-Term Memory.
+> Jury 2: PS 96, Sentiment-Aware Chatbot, built on top of the Jury 1 work.
 > MIT School of Computing, MIT Art, Design and Technology University.
+
+---
+
+## Jury 2: what was added (PS 96)
+
+| PS 96 step | How we did it | File |
+|---|---|---|
+| Detect sentiment per message | Two readers: a local emotion model (7 emotions) and the LLM. Combined, with the disagreement shown openly | `sentiment.py` |
+| Adjust the reply tone | A lookup table from emotion to a tone instruction, placed in the system prompt | `tone.py` |
+| Escalation for distress | Three levels. A crisis uses fixed rules and a fixed reply with helplines, never the LLM | `safety.py` |
+| Remember how the user felt | Each message's emotion is saved, so the bot can follow up in a later session | `mood_log.py` |
+| Test on emotional inputs | 42 labelled messages plus crisis and look-alike phrases | `evaluation/evaluate_sentiment.py` |
+
+### How a message flows now
+
+```mermaid
+flowchart LR
+    A[User message] --> S{Crisis phrase?}
+    S -- yes --> X[Fixed safe reply<br/>with helplines]
+    S -- no --> B[Read message<br/>LLM: facts + emotion]
+    A --> L[Local emotion model]
+    B --> C[Combine the two readers]
+    L --> C
+    C --> T[Safety level + tone]
+    T --> M[Search memory]
+    M --> P[Prompt: memories + tone + past moods]
+    P --> R[Reply, streamed]
+```
+
+### Results
+
+| Reader | Accuracy (42 messages) | Macro-F1 | Hard cases (sarcasm etc.) |
+|---|---|---|---|
+| Local model alone | 83.3% | 0.834 | 2 of 7 |
+| LLM alone | 97.6% | 0.976 | 7 of 7 |
+| **Combined (what the bot uses)** | **97.6%** | **0.976** | **7 of 7** |
+
+Safety rules: **10 of 10** crisis messages caught, **0 of 8** false alarms on everyday phrases like
+"this traffic is killing me". Full output in `docs/assets/sentiment_evaluation_output.txt`.
+
+Why keep the local model if the LLM is better? It gives the bot a working answer when the LLM is
+unreachable, it costs nothing, and when the two disagree that disagreement is itself a signal
+that the message is tricky.
 
 ---
 
@@ -97,7 +142,7 @@ You need three things:
    [atlascloud.ai](https://atlascloud.ai) and create one.
 
 You will also need internet access on the **first run only**, to download the embedding model
-(about 90 MB). After that it is cached and the memory features work offline.
+(about 90 MB) and the emotion model (about 330 MB). After that it is cached and the memory features work offline.
 
 ### Step 1. Get the code
 
@@ -299,6 +344,10 @@ current setting of `0.25` in `config.py` was chosen.
 ├── embedder.py                   turns text into vectors, runs locally
 ├── vector_store.py               ChromaDB behind a swappable interface
 ├── memory_manager.py             the brain: 3 layers, replacement, trimming, privacy
+├── sentiment.py                  local emotion model + LLM, combined   (Jury 2)
+├── tone.py                       emotion -> how to reply               (Jury 2)
+├── safety.py                     distress levels, crisis reply         (Jury 2)
+├── mood_log.py                   how the user felt, across sessions    (Jury 2)
 ├── chat_engine.py                one full turn of conversation
 ├── run.py                        start the web interface
 ├── test_connection.py            startup checks
@@ -309,7 +358,9 @@ current setting of `0.25` in `config.py` was chosen.
 │
 ├── evaluation/
 │   ├── probe_set.py              the test questions and expected answers
-│   └── evaluate.py               precision, recall, MRR, contradiction tests
+│   ├── evaluate.py               precision, recall, MRR, contradiction tests
+│   ├── emotion_probe_set.py      labelled emotional messages           (Jury 2)
+│   └── evaluate_sentiment.py     emotion accuracy, F1, safety checks   (Jury 2)
 │
 ├── docs/
 │   ├── capture_screenshots.py    regenerates every figure from the live app

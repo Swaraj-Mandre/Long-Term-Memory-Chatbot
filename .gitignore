@@ -27,3 +27,6 @@ evaluation/_eval_db/
 *.bak
 .DS_Store
 Thumbs.db
+
+# Local preview settings for the editor
+.claude/

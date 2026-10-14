@@ -49,8 +49,20 @@ def describe_tech_stack():
         {
             "part": "Language model",
             "value": config.LLM_MODEL,
-            "purpose": "Writes the replies, and reads each message to pull out "
-                       "lasting facts about the user.",
+            "purpose": "Writes the replies in the chosen tone, and reads each "
+                       "message for facts and emotion.",
+        },
+        {
+            "part": "Emotion model",
+            "value": config.EMOTION_MODEL.split("/")[-1],
+            "purpose": "Scores every message against 7 emotions. Runs on this "
+                       "machine and is cross-checked against the LLM.",
+        },
+        {
+            "part": "Safety",
+            "value": "fixed rules first",
+            "purpose": "Crisis phrases trigger a fixed reply with helplines. "
+                       "The LLM is never trusted to write that reply.",
         },
         {
             "part": "Model host",
@@ -95,9 +107,14 @@ def next_session_id():
     generated at random, so they run session-1, session-2, session-3 and stay
     correct even after the program is restarted.
     """
+    # Sessions can appear in the memory store, the mood log, or both (a
+    # crisis-only session stores no memories), so look in both places.
+    names = [r.get("session_id", "") for r in ENGINE.memory.all_memories_for_display()]
+    names += [m.get("session_id", "") for m in ENGINE.moods.entries]
+
     used_numbers = []
-    for record in ENGINE.memory.all_memories_for_display():
-        name = str(record.get("session_id", ""))
+    for name in names:
+        name = str(name)
         if name.startswith("session-"):
             tail = name.split("-", 1)[1]
             if tail.isdigit():
@@ -179,6 +196,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return self.send_json(200, {
                 "memories": ENGINE.memory.all_memories_for_display(),
                 "summary": ENGINE.memory.summary(),
+                "moods": ENGINE.moods.recent(),
             })
 
         if self.path == "/api/status":
@@ -255,6 +273,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         if self.path == "/api/reset":
             count = ENGINE.memory.wipe_everything()
+            ENGINE.moods.clear()
             ENGINE.start_new_session("session-1")
             return self.send_json(200, {
                 "deleted": count,
@@ -268,11 +287,12 @@ def run():
     problems = config.check_configuration()
 
     print("=" * 64)
-    print("  Chatbot with Long-Term Memory")
-    print("  Topic 192  |  Generative AI  |  Model Making")
+    print("  Sentiment-Aware Chatbot with Long-Term Memory")
+    print("  PS 96  |  Generative AI  |  Jury 2")
     print("=" * 64)
     print("  Language model  :", config.LLM_MODEL)
     print("  Embedding model :", config.EMBEDDING_MODEL)
+    print("  Emotion model   :", config.EMOTION_MODEL)
     print("  Memory database :", config.CHROMA_DIR)
     print("  Stored memories :", ENGINE.memory.summary())
 
@@ -282,6 +302,15 @@ def run():
             print("  WARNING:", problem)
         print("  The interface will still open and memory will still work,")
         print("  but the bot cannot write replies without a key.")
+
+    # Every start of the program is a new conversation. Without this, a
+    # restart would carry on as "session-1" and mix with that session's moods.
+    ENGINE.start_new_session(next_session_id())
+    print("  Session         :", ENGINE.session_id)
+
+    # Load the emotion model now, so the first message is not slow.
+    print("  Loading the emotion model...")
+    ENGINE.emotion_model.classify("hello")
 
     print("=" * 64)
     print("  Open http://%s:%d" % (config.WEB_HOST, config.WEB_PORT))

@@ -252,7 +252,7 @@ class LLMClient:
         """
         raw = self._send(
             messages, config.EXTRACT_TEMPERATURE, config.EXTRACT_MAX_TOKENS,
-            purpose="find lasting facts in the message",
+            purpose="read the message: facts and emotion",
         )
         parsed = parse_json_from_text(raw)
         debug_log.as_json("parsed into", parsed)
