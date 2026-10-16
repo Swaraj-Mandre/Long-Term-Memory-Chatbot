@@ -477,10 +477,12 @@ body {
 .emotion-main { display: flex; align-items: center; gap: 14px; }
 
 .emotion-face {
-  font-size: 34px;
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1;
-  width: 54px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -488,6 +490,15 @@ body {
 }
 
 .emotion-text { flex: 1; }
+
+/* The text face takes the colour of its emotion. */
+.face-joy      { color: var(--joy); }
+.face-sadness  { color: var(--sadness); }
+.face-anger    { color: var(--anger); }
+.face-fear     { color: var(--fear); }
+.face-surprise { color: var(--surprise); }
+.face-disgust  { color: var(--disgust); }
+.face-neutral  { color: var(--neutral); }
 
 .emotion-label {
   font-size: 20px;

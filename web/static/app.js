@@ -23,10 +23,16 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
-// One emoji per emotion. The colours live in style.css (--joy, --sadness...).
-const EMOJI = {
-  joy: "\u{1F60A}", sadness: "\u{1F622}", anger: "\u{1F620}", fear: "\u{1F628}",
-  surprise: "\u{1F62E}", disgust: "\u{1F922}", neutral: "\u{1F610}",
+// One text face per emotion, typed with plain keyboard characters.
+// The colours live in style.css (--joy, --sadness...).
+const FACE = {
+  joy:      "^_^",    // smiling eyes
+  sadness:  "T_T",    // tears running down
+  anger:    ">_<",    // eyes squeezed shut in frustration
+  fear:     "O_O",    // eyes wide open
+  surprise: "o_O",    // one eye wider than the other
+  disgust:  "=_=",    // fed up
+  neutral:  "-_-",    // flat, no reaction
 };
 
 function percent(value) {
@@ -141,8 +147,9 @@ async function sendMessage(event) {
       // emotion and the chosen tone appear while the model is still thinking.
       const d = event.details;
       const mood = d.mood;
-      setTag(user.tag, `<span class="dot dot-${mood.emotion}"></span>
-                        ${mood.emotion} &middot; ${percent(mood.confidence)}`);
+      // Only a coloured dot. A real user should not see a label of how
+      // they feel; the full reading is in the side panel for the demo.
+      setTag(user.tag, `<span class="dot dot-${mood.emotion}"></span>`);
       setMoodLine(mood.emotion);
       renderPanel(d);
 
@@ -150,7 +157,7 @@ async function sendMessage(event) {
         isCrisis = true;
         showSafetyCard(bot.bubble, d.helplines);
       } else {
-        bot.bubble.textContent = "thinking in a " + d.tone.name.toLowerCase() + " tone...";
+        bot.bubble.textContent = "thinking...";
       }
     } else if (event.type === "token") {
       addText(event.text);
@@ -245,7 +252,7 @@ function renderEmotion(mood) {
 
   el("emotionBox").innerHTML = `
     <div class="emotion-main">
-      <span class="emotion-face face-${mood.emotion}">${EMOJI[mood.emotion] || ""}</span>
+      <span class="emotion-face face-${mood.emotion}">${FACE[mood.emotion] || "-_-"}</span>
       <div class="emotion-text">
         <div class="emotion-label">${escapeHtml(mood.emotion)}</div>
         <div class="bar"><span class="bar-fill fill-${mood.emotion}"
