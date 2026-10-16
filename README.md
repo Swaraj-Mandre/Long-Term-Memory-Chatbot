@@ -1,460 +1,180 @@
 # Sentiment-Aware Chatbot with Long-Term Memory
 
-A chatbot that notices how you feel, changes how it talks to match, and remembers you. Close the
-program, reopen it a week later, and it still knows where you live, what you study, and that you
-were worried about an exam last time.
+**Most chatbots read your words. This one also reads how you feel, and remembers you.**
+
+Tell it you got an internship and it celebrates with you. Tell it you failed an exam and it slows
+down and speaks gently. Come back next week and it asks how the exam went.
 
 <p>
 <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-1E2761">
-<img alt="ChromaDB" src="https://img.shields.io/badge/Vector%20DB-ChromaDB-047857">
-<img alt="Embeddings" src="https://img.shields.io/badge/Embeddings-local%20MiniLM-047857">
 <img alt="LLM" src="https://img.shields.io/badge/LLM-DeepSeek%20v4%20Flash-B45309">
+<img alt="Emotion" src="https://img.shields.io/badge/Emotion-DistilRoBERTa-7C3AED">
+<img alt="ChromaDB" src="https://img.shields.io/badge/Vector%20DB-ChromaDB-047857">
 </p>
 
-> **Generative AI mini project.** Jury 1: Topic 192, Chatbot with Long-Term Memory.
-> Jury 2: PS 96, Sentiment-Aware Chatbot, built on top of the Jury 1 work.
-> MIT School of Computing, MIT Art, Design and Technology University.
+> Generative AI mini project, MIT School of Computing, MIT ADT University.
+> **Jury 1:** Topic 192, Chatbot with Long-Term Memory.
+> **Jury 2:** PS 96, Sentiment-Aware Chatbot, built on top of Jury 1.
+
+![The app: chat on the left, "why this reply" on the right](docs/screenshots/jury2/02_concern.png)
 
 ---
 
-## Jury 2: what was added (PS 96)
+## In one minute
 
-| PS 96 step | How we did it | File |
-|---|---|---|
-| Detect sentiment per message | Two readers: a local emotion model (7 emotions) and the LLM. Combined, with the disagreement shown openly | `sentiment.py` |
-| Adjust the reply tone | A lookup table from emotion to a tone instruction, placed in the system prompt | `tone.py` |
-| Escalation for distress | Three levels. A crisis uses fixed rules and a fixed reply with helplines, never the LLM | `safety.py` |
-| Remember how the user felt | Each message's emotion is saved, so the bot can follow up in a later session | `mood_log.py` |
-| Test on emotional inputs | 42 labelled messages plus crisis and look-alike phrases | `evaluation/evaluate_sentiment.py` |
-
-### How a message flows now
-
-```mermaid
-flowchart LR
-    A[User message] --> S{Crisis phrase?}
-    S -- yes --> X[Fixed safe reply<br/>with helplines]
-    S -- no --> B[Read message<br/>LLM: facts + emotion]
-    A --> L[Local emotion model]
-    B --> C[Combine the two readers]
-    L --> C
-    C --> T[Safety level + tone]
-    T --> M[Search memory]
-    M --> P[Prompt: memories + tone + past moods]
-    P --> R[Reply, streamed]
-```
-
-### Results
-
-| Reader | Accuracy (42 messages) | Macro-F1 | Hard cases (sarcasm etc.) |
-|---|---|---|---|
-| Local model alone | 83.3% | 0.834 | 2 of 7 |
-| LLM alone | 97.6% | 0.976 | 7 of 7 |
-| **Combined (what the bot uses)** | **97.6%** | **0.976** | **7 of 7** |
-
-Safety rules: **10 of 10** crisis messages caught, **0 of 8** false alarms on everyday phrases like
-"this traffic is killing me". Full output in `docs/assets/sentiment_evaluation_output.txt`.
-
-Why keep the local model if the LLM is better? It gives the bot a working answer when the LLM is
-unreachable, it costs nothing, and when the two disagree that disagreement is itself a signal
-that the message is tricky.
-
----
-
-## The problem this solves
-
-A language model has no memory of its own. It answers using only the text inside its context
-window, and that window is a fixed size. The moment a conversation ends, everything you said is
-gone, so you end up repeating yourself in every new chat.
-
-This project adds the missing piece: a **memory layer** that stores what you said, finds the
-relevant parts later, and feeds them back into the conversation.
-
-![The running application](docs/assets/03_full_interface.png)
-
-The panel on the right is the interesting part. It shows every memory the bot used for the current
-message, with the actual similarity score, and it flags the moment a new fact replaces an old one.
-
----
-
-## What it does
-
-| Capability | How it works |
+| It can... | How |
 |---|---|
-| **Remembers facts** | Each message is read by the language model, which pulls out lasting facts such as `city: Pune` |
-| **Searches by meaning** | Text becomes 384 numbers. Questions match memories by meaning, not by shared words |
-| **Survives a restart** | Everything is written to disk, so memory outlives the running program |
-| **Resolves contradictions** | Say you moved cities and the old fact is retired, never returned again |
-| **Controls its own growth** | Raw messages are capped and trimmed. Extracted facts are kept |
-| **Protects private data** | Emails, phone numbers and ID numbers are stripped before anything is saved |
-| **Replies as it writes** | The answer appears word by word instead of all at once, and the memory panel fills in first |
-
-### The contradiction bit, in one picture
-
-Tell it you moved from Pune to Mumbai and this appears:
-
-![A fact being replaced](docs/assets/03a_contradiction_panel.png)
-
-The old record is not deleted. It is marked as replaced and kept as history, while searches only
-ever look at current records. That is what stops the bot confidently telling you that you still
-live in Pune.
+| **Sense your mood** | Two readers check every message: a local emotion model and the LLM |
+| **Change its tone** | Each of 7 emotions maps to a tone rule, such as Gentle or Cheerful |
+| **Stay safe in a crisis** | Fixed rules catch distress and show helplines (Tele-MANAS 14416, 112) |
+| **Remember facts** | "I live in Pune" is saved and recalled in later sessions |
+| **Update itself** | Say you moved to Mumbai and the Pune fact is retired |
+| **Remember feelings** | It knows you were worried last time and checks in |
+| **Protect privacy** | Emails and phone numbers are removed before anything is saved |
+| **Explain itself** | A side panel shows the emotion, the tone and the memories behind each reply |
 
 ---
 
-## How it works
+## How one message travels
 
 ```mermaid
 flowchart LR
-    A[User message] --> B[Extract facts<br/>DeepSeek v4 Flash]
-    B --> C[(Memory store<br/>ChromaDB on disk)]
-    A --> D[Search memory<br/>cosine + recency]
-    C --> D
-    D --> E[Build prompt<br/>memories in system message]
-    E --> F[Write reply<br/>DeepSeek v4 Flash]
-    F --> G[Answer to user]
+    A[Your message] --> S{Crisis words?}
+    S -- yes --> X[Fixed safe reply<br/>with helplines]
+    S -- no --> R[Read emotion<br/>local model + LLM]
+    R --> T[Pick safety level<br/>and tone]
+    T --> M[Search memory<br/>ChromaDB]
+    M --> W[Write the reply<br/>DeepSeek v4 Flash]
 ```
 
-### Three layers of memory
+**Two readers, one decision**
 
-| Layer | What it holds | Lifetime |
+| Readers say | What the bot does |
+|---|---|
+| Both agree | Use it |
+| They disagree | Trust the LLM, since it reads context such as sarcasm |
+| LLM is down | Use the local model, or neutral if it is unsure |
+
+**Three levels of care**
+
+| Level | When | What the bot does |
 |---|---|---|
-| **Working** | The last six messages, word for word | Cleared when the session ends |
-| **Episodic** | The raw messages you typed | Stored, searchable, trimmed when large |
-| **Semantic** | Short facts such as `city: Mumbai` | Stored, versioned, never trimmed |
-
-Embeddings are computed **on your own machine**, so the memory store never travels to any API.
-Only the current message and the few memories retrieved for it are sent out.
+| 0 Normal | No sign of distress | Adapts the tone |
+| 1 Concern | 3 negative messages in a row, or the LLM flags it | Gentle check-in, mentions help is available |
+| 2 Crisis | Words about self-harm or not wanting to live | Skips the LLM, shows a fixed reply with helplines, does not store the message |
 
 ---
 
-## Setup guide
+## Results
 
-Written for Windows, since that is what we develop on. Notes for macOS and Linux are included
-where the command differs.
+| Test | Result |
+|---|---|
+| Emotion accuracy, 42 labelled messages | **97.6%** |
+| Sarcasm and mixed feelings | **7 of 7** |
+| Crisis messages caught | **10 of 10** |
+| False alarms ("this traffic is killing me") | **0 of 8** |
+| Memory recall, 22 questions | **22 of 22** ranked first |
+| Contradictions handled | **4 of 4** |
 
-### Before you start
+Full output: [sentiment](docs/results/sentiment_evaluation.txt) and
+[memory](docs/results/memory_evaluation.txt).
 
-You need three things:
+---
 
-1. **Python 3.11 or newer.** Check with `python --version`. Get it from
-   [python.org](https://www.python.org/downloads/) and tick **Add Python to PATH** during install.
-2. **Git.** Check with `git --version`.
-3. **An AtlasCloud API key**, for the language model. Sign in at
-   [atlascloud.ai](https://atlascloud.ai) and create one.
+## Run it
 
-You will also need internet access on the **first run only**, to download the embedding model
-(about 90 MB) and the emotion model (about 330 MB). After that it is cached and the memory features work offline.
-
-### Step 1. Get the code
+You need **Python 3.11+** and an **AtlasCloud API key**.
 
 ```bash
 git clone https://github.com/Swaraj-Mandre/Long-Term-Memory-Chatbot.git
 cd Long-Term-Memory-Chatbot
-```
-
-### Step 2. Create a virtual environment
-
-A virtual environment keeps this project's packages separate from everything else on your machine.
-
-```bash
 python -m venv .venv
-```
-
-Then activate it. **Windows:**
-
-```bash
 .venv\Scripts\activate
-```
-
-**macOS or Linux:**
-
-```bash
-source .venv/bin/activate
-```
-
-You will see `(.venv)` at the start of your prompt once it is active. You need to activate it
-every time you open a new terminal.
-
-### Step 3. Install the packages
-
-```bash
 pip install -r requirements.txt
-```
-
-This pulls in ChromaDB, sentence-transformers, PyTorch and the OpenAI client library. It is a few
-hundred megabytes and takes a couple of minutes.
-
-<details>
-<summary>Faster alternative using <code>uv</code></summary>
-
-If you have [uv](https://github.com/astral-sh/uv) installed, it resolves and installs the same
-packages considerably faster:
-
-```bash
-uv venv --python 3.11 .venv
-uv pip install --python .venv/Scripts/python.exe -r requirements.txt
-```
-
-</details>
-
-### Step 4. Add your API key
-
-Copy the example file:
-
-```bash
 copy .env.example .env
 ```
 
-On macOS or Linux use `cp .env.example .env` instead.
-
-Open `.env` in any text editor and put your key after the equals sign:
-
-```
-ATLASCLOUD_API_KEY=your_key_goes_here
-```
-
-> **Never commit `.env`.** It is already listed in `.gitignore`. Each of us uses our own key.
-
-### Step 5. Check everything works
+Put your key in `.env` after `ATLASCLOUD_API_KEY=`, then:
 
 ```bash
 python test_connection.py
-```
-
-You should see:
-
-```
-[1/3] Checking settings...
-      OK   model    : deepseek-ai/deepseek-v4-flash
-      OK   API key  : found
-[2/3] Calling the language model...
-      OK   reply    : READY
-[3/3] Loading the local embedding model...
-      OK   dimensions            : 384
-      OK   same meaning score    : 0.821
-      OK   unrelated score       : 0.351
-  ALL CHECKS PASSED
-```
-
-Those last two numbers are the whole idea in miniature. "I live in Pune" and "My home city is
-Pune" score **0.821** against each other, while "I enjoy playing cricket" scores **0.351**. The
-system compares meaning, not words.
-
-If anything says FAILED, jump to [Troubleshooting](#troubleshooting).
-
-### Step 6. Run it
-
-```bash
 python run.py
 ```
 
-Then open **http://localhost:8000** in your browser. Press `Ctrl+C` in the terminal to stop.
+Open **http://localhost:8000**. The first run downloads two small local models (about 420 MB),
+after that they are cached.
 
-**Watch the terminal while you chat.** Every turn prints what really happened: the
-exact prompt sent to the model, the model's own reasoning, the memory search with
-every score, and the token count. It is the quickest way to understand the system,
-and useful if a faculty member asks how you know a memory was actually used.
-
-To turn that off, add `DEBUG=false` to your `.env` file.
+On macOS or Linux use `source .venv/bin/activate` and `cp .env.example .env`.
 
 ---
 
-## Trying it out
+## Demo in five messages
 
-Type these in order to see every feature work:
+Click a suggestion chip or type these:
 
-```
-Hi, my name is Swaraj and I live in Pune. I study AI at MIT ADT University.
-```
+1. `I got selected for the Google internship!!` : tone turns **Cheerful**
+2. `Great, another rejection email from Amazon. Just what I needed.` : sarcasm, the readers may
+   disagree and the LLM wins
+3. `I failed my DBMS exam again too. Nothing I do ever works.` : safety moves to **Concern**
+4. Click **New Session**, then `hey, I'm back` : it remembers and checks in
+5. `I don't want to live anymore` : **Crisis** card with helplines, no AI text
 
-```
-My favourite food is misal pav and I have a dog named Bruno.
-```
-
-Now click **Start New Session**. This clears the recent-message list, so anything the bot recalls
-from here has to come out of the database.
-
-```
-Do you remember where I live?
-```
-
-It answers Pune. Now contradict it:
-
-```
-Actually I moved to Mumbai last week.
-```
-
-```
-So which city am I in now?
-```
-
-Watch the **Contradictions Resolved** panel. The Pune record is marked replaced and Mumbai becomes
-the current answer.
-
-Two more things worth trying:
-
-```
-My email is you@example.com and my phone is 9876543210
-```
-
-Look at the Memory Store panel. Both values were stripped before being written to disk.
-
-```
-/forget city
-```
-
-That deletes every record about a topic permanently, which is different from replacing it.
+Memory features: say where you live, start a new session, ask "where do I live?", then say you
+moved. Use `/forget city` to delete a topic for good.
 
 ---
 
-## Measuring how well it works
-
-```bash
-python evaluation/evaluate.py
-```
-
-This runs a fixed set of 22 questions whose correct answers were written down before any test was
-run, and reports:
-
-| Measure | Result | What it means |
-|---|---|---|
-| Recall at 4 | **1.000** | Every question found its memory |
-| MRR | **1.000** | The correct memory was always ranked first |
-| Correct at rank 1 | **22 of 22** | No question was answered from the wrong memory |
-| Contradictions handled | **4 of 4** | New value returned, old value never |
-| Precision at 4 | 0.694 | Capped at 0.25 by design, see note below |
-
-Each question has exactly one correct memory and we return four, so precision cannot exceed 0.25
-before anything else is considered. Rank one accuracy and MRR are the measures that fit this task.
-
-Accuracy is deliberately **not** reported. Almost every stored memory is irrelevant to any single
-question, so a system that returned nothing at all would still score well on accuracy while being
-useless.
-
-The script also sweeps the similarity threshold and shows what each value costs, which is how the
-current setting of `0.25` in `config.py` was chosen.
-
----
-
-## Project structure
+## Project map
 
 ```
 .
-├── config.py                     every setting in one place
-├── llm_client.py                 talks to DeepSeek v4 Flash via AtlasCloud
-├── embedder.py                   turns text into vectors, runs locally
-├── vector_store.py               ChromaDB behind a swappable interface
-├── memory_manager.py             the brain: 3 layers, replacement, trimming, privacy
-├── sentiment.py                  local emotion model + LLM, combined   (Jury 2)
-├── tone.py                       emotion -> how to reply               (Jury 2)
-├── safety.py                     distress levels, crisis reply         (Jury 2)
-├── mood_log.py                   how the user felt, across sessions    (Jury 2)
-├── chat_engine.py                one full turn of conversation
-├── run.py                        start the web interface
-├── test_connection.py            startup checks
+├── chat_engine.py        one full turn: read, decide, recall, reply
+├── sentiment.py          local emotion model + LLM, combined       (Jury 2)
+├── tone.py               emotion to tone rule                      (Jury 2)
+├── safety.py             distress levels and the crisis reply      (Jury 2)
+├── mood_log.py           how you felt, across sessions             (Jury 2)
+├── memory_manager.py     3 memory layers, fact updates, privacy
+├── vector_store.py       ChromaDB storage
+├── embedder.py           text to vectors, runs locally
+├── llm_client.py         DeepSeek v4 Flash via AtlasCloud
+├── config.py             every setting in one place
+├── run.py                start the app
+├── test_connection.py    startup checks
 │
-├── web/
-│   ├── server.py                 HTTP server, standard library only
-│   └── static/                   index.html, style.css, app.js
-│
-├── evaluation/
-│   ├── probe_set.py              the test questions and expected answers
-│   ├── evaluate.py               precision, recall, MRR, contradiction tests
-│   ├── emotion_probe_set.py      labelled emotional messages           (Jury 2)
-│   └── evaluate_sentiment.py     emotion accuracy, F1, safety checks   (Jury 2)
-│
+├── web/                  server.py + static/ (HTML, CSS, JS)
+├── evaluation/           test sets and scoring scripts
 ├── docs/
-│   ├── capture_screenshots.py    regenerates every figure from the live app
-│   └── assets/                   those figures
-│
-└── presentation/
-    ├── build_deck.js             generates the slide deck
-    └── Chatbot_Long_Term_Memory_Jury1.pptx
+│   ├── screenshots/      jury1/ and jury2/ figures
+│   └── results/          evaluation output
+└── presentation/         jury1/ and jury2/ deck builders
 ```
 
-Each file has one job, and the reasoning behind the tricky parts is written in the comments rather
-than left for you to guess.
+Each file has one job. The reasoning is in the comments.
 
 ---
 
-## Troubleshooting
+## Tech stack
 
-<details>
-<summary><b>ATLASCLOUD_API_KEY is not set</b></summary>
+| Part | Tool |
+|---|---|
+| Language model | DeepSeek v4 Flash (AtlasCloud) |
+| Emotion model | DistilRoBERTa, 7 emotions, runs locally |
+| Embeddings | all-MiniLM-L6-v2, runs locally |
+| Vector database | ChromaDB on disk |
+| Interface | Python HTTP server, HTML, CSS, JavaScript, streamed replies |
 
-You have not created `.env` yet, or the key line is empty. Copy `.env.example` to `.env` and put
-your key after `ATLASCLOUD_API_KEY=` with no quotes and no spaces.
+---
 
-</details>
+## Honest limits
 
-<details>
-<summary><b>The API rejected the key (401)</b></summary>
-
-Check the key is complete and has not expired. A key that can list models but not run them usually
-means the account has no credit.
-
-</details>
-
-<details>
-<summary><b>The model ran out of tokens while thinking</b></summary>
-
-DeepSeek v4 Flash reasons internally before answering, and that reasoning counts against
-`max_tokens`. If the budget runs out first, the answer comes back empty. Raise
-`CHAT_MAX_TOKENS` or `EXTRACT_MAX_TOKENS` in `config.py`.
-
-</details>
-
-<details>
-<summary><b>It hangs on "Loading the local embedding model"</b></summary>
-
-The first run downloads about 90 MB. You need internet for that one time only. After it is cached,
-this step takes under a second.
-
-</details>
-
-<details>
-<summary><b>Port 8000 is already in use</b></summary>
-
-Another copy of the server is still running. Close it, or change `PORT` in your `.env`.
-
-</details>
-
-<details>
-<summary><b>ModuleNotFoundError</b></summary>
-
-Your virtual environment is probably not active. Look for `(.venv)` at the start of your prompt
-and run the activate command from Step 2 again.
-
-</details>
-
-<details>
-<summary><b>Starting completely fresh</b></summary>
-
-Delete the `memory_data` folder, or click **Wipe Memory** in the interface.
-
-</details>
+- The local emotion model understands English only.
+- Fixed crisis rules can miss indirect wording. The LLM is a second check.
+- It is a support tool, not a counsellor. It points people to real help.
 
 ---
 
 ## Team
 
-| Name | Section |
-|---|---|
-| Swaraj Mandre | Memory design and retrieval |
-| Saumya Joshi | Language model integration |
-| Siddhant Pawar | Evaluation and interface |
+**Swaraj Mandre**, **Saumya Joshi**, **Siddhant Pawar** (LY-AIA5)
 
-Guided by **Prof. Dr. Snehalata Funde**.
-
----
-
-## Notes and sources
-
-The memory design follows ideas from published work rather than being invented from scratch:
-
-- Vaswani et al., *Attention Is All You Need*, NeurIPS 2017
-- Packer et al., *MemGPT: Towards LLMs as Operating Systems*, arXiv:2310.08560, 2023
-- Reimers and Gurevych, *Sentence-BERT*, EMNLP 2019
-- OpenAI, *Memory and new controls for ChatGPT*, February 2024
-- [Mem0](https://github.com/mem0ai/mem0), an open source memory layer
-
-This is coursework, shared for reference and for our own team to work from.
+Guided by **Prof. Dr. Snehalata Funde**, MIT School of Computing, MIT ADT University.

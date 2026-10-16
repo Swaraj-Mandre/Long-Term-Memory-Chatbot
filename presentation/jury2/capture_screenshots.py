@@ -1,12 +1,12 @@
 """
 Takes the screenshots used in the Jury 2 presentation.
 
-Same idea as capture_screenshots.py: the figures are taken from the running
+Same idea as presentation/jury1/capture_screenshots.py: the figures are taken from the running
 application, so the slides always show what the system really does.
 
 Start the server first, then run:
 
-    .venv\\Scripts\\python.exe docs\\capture_screenshots_jury2.py http://127.0.0.1:8000
+    .venv\\Scripts\\python.exe presentation\\jury2\\capture_screenshots.py http://127.0.0.1:8000
 
 WARNING: it wipes the memory of the server it talks to, so point it at a test
 copy, not at memory you want to keep.
@@ -19,7 +19,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 SERVER = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "jury2")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "screenshots", "jury2")
 
 
 def send_message(page, text):
@@ -86,19 +86,15 @@ def main():
         page.goto(SERVER)
         page.wait_for_selector("#messageInput")
         time.sleep(1)
-        save(page, "00_welcome.png")
 
+        # Full-window shots. crop_figures.py cuts the panel close-ups from these.
         print("Session 1: good news, then a sarcastic bad day")
         send_message(page, "I got selected for the Google internship!!")
         send_message(page, "Great, another rejection email from Amazon. Just what I needed.")
         save(page, "01_full_interface.png")
-        save(page, "01a_emotion_disagree.png", "#stepEmotion")
-        save(page, "01b_two_tones.png", "#transcript")
 
         send_message(page, "I failed my DBMS exam again too. Nothing I do ever works.")
         save(page, "02_concern.png")
-        save(page, "02a_tone_concern.png", "#stepTone")
-        save(page, "02b_reply_concern.png", ".msg-bot")
         save_chat(page, "chat_tones.png", 6)
 
         print("Session 2: the bot remembers")
@@ -106,17 +102,11 @@ def main():
         time.sleep(1)
         send_message(page, "hey, I'm back")
         save(page, "03_cross_session.png")
-        save(page, "03a_follow_up.png", "#transcript")
-        save(page, "03b_timeline.png", ".timeline-panel")
         save_chat(page, "chat_follow_up.png", 3)
 
         print("Crisis handling")
         send_message(page, "I don't want to live anymore")
         save(page, "04_crisis.png")
-        save(page, "04a_safety_card.png", ".msg-bot")
-        save(page, "04b_crisis_emotion.png", "#stepEmotion")
-        save(page, "04c_crisis_tone.png", "#stepTone")
-        save(page, "04d_timeline.png", ".timeline-panel")
         save_chat(page, "chat_crisis.png", 2)
 
         browser.close()

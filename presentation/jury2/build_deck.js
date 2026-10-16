@@ -1,18 +1,19 @@
 /*
   Builds the Jury 2 presentation (PS 96, Sentiment-Aware Chatbot).
 
-  Run with:  node presentation/build_deck_jury2.js
+  Run with:  node presentation/jury2/build_deck.js
+  Then:      .venv\Scripts\python.exe presentation\jury2\copy_title_details.py
 
-  Same look as the Jury 1 deck (build_deck.js), so the two read as one
-  project. Figures come from docs/assets/jury2, which are captured from the
-  running app by docs/capture_screenshots_jury2.py and cut to size by
-  presentation/crop_figures.py.
+  Same look as the Jury 1 deck (presentation/jury1/build_deck.js), so the two
+  read as one project. Figures come from docs/screenshots/jury2, which are
+  captured from the running app by capture_screenshots.py and cut to size by
+  crop_figures.py, both in this folder.
 */
 
 const path = require("path");
 const pptxgen = require("pptxgenjs");
 
-const FIGS = path.join(__dirname, "..", "docs", "assets", "jury2");
+const FIGS = path.join(__dirname, "..", "..", "docs", "screenshots", "jury2");
 const OUT = path.join(__dirname, "SentimentAwareChatbot_Jury2.pptx");
 
 /* --------------------------------------------------------------- palette */
@@ -182,39 +183,28 @@ function stage(s, x, y, w, h, title, sub, style) {
   const s = pres.addSlide();
   s.background = { color: NAVY };
 
+  // Same positions as the Jury 1 title slide. The college logo, the student
+  // table and the "Guided by" block are copied from the Jury 1 deck after this
+  // file is built, by copy_title_details.py in this folder.
   s.addText("Sentiment-Aware Chatbot", {
-    x: M + 0.15, y: 1.75, w: 11.5, h: 1.0,
+    x: 0.77, y: 2.0, w: 11.2, h: 0.95,
     fontFace: HEAD, fontSize: 48, bold: true, color: WHITE,
     isTextBox: true, margin: 0,
   });
   s.addText("A chatbot that notices how the user feels, adapts its tone, and responds safely to distress", {
-    x: M + 0.15, y: 2.85, w: 11.0, h: 0.5,
+    x: 0.77, y: 3.02, w: 11.0, h: 0.5,
     fontFace: BODY, fontSize: 19, color: ICE, isTextBox: true, margin: 0,
   });
 
   s.addShape(pres.ShapeType.roundRect, {
-    x: M + 0.15, y: 3.65, w: 5.1, h: 0.5, rectRadius: 0.25,
+    x: 0.77, y: 3.85, w: 5.1, h: 0.44, rectRadius: 0.22,
     fill: { color: NAVY_SOFT }, line: { color: "3D4C8C", width: 0.75 },
   });
   s.addText("PS 96     |     Real-Time Scenario     |     Jury 2", {
-    x: M + 0.15, y: 3.65, w: 5.1, h: 0.5,
+    x: 0.77, y: 3.85, w: 5.1, h: 0.44,
     fontFace: BODY, fontSize: 14, color: ICE, align: "center", valign: "middle",
     isTextBox: true, margin: 0,
   });
-
-  text(s, [
-    { text: "Swaraj Mandre", options: { breakLine: true } },
-    { text: "Saumya Joshi", options: { breakLine: true } },
-    { text: "Siddhant Pawar" },
-  ], { x: M + 0.15, y: 4.75, w: 4.5, h: 1.2, fontSize: 16, color: WHITE, paraSpaceAfter: 6 });
-
-  text(s, "Guided by", { x: 5.6, y: 4.78, w: 5, h: 0.3, fontSize: 12, color: ICE });
-  text(s, "Prof. Dr. Snehalata Funde", { x: 5.6, y: 5.05, w: 6, h: 0.35, fontSize: 16, color: WHITE });
-  text(s, [
-    { text: "Group 3, LY-AIA5", options: { breakLine: true } },
-    { text: "MIT School of Computing", options: { breakLine: true } },
-    { text: "MIT Art, Design and Technology University" },
-  ], { x: 5.6, y: 5.55, w: 6.5, h: 0.9, fontSize: 12.5, color: ICE, paraSpaceAfter: 2 });
 
   s.addNotes(
     "Good morning. Our Jury 2 project is PS 96, a sentiment-aware chatbot. " +

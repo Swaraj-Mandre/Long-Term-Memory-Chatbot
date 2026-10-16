@@ -1,9 +1,9 @@
 """
 Cuts focused figures for the Jury 2 slides out of the full screenshots.
 
-Run after docs/capture_screenshots_jury2.py:
+Run after capture_screenshots.py in this folder:
 
-    .venv\\Scripts\\python.exe presentation\\crop_figures.py
+    .venv\\Scripts\\python.exe presentation\\jury2\\crop_figures.py
 
 Coordinates are in pixels of the 2880 x 1720 screenshots.
 """
@@ -12,7 +12,7 @@ import os
 
 from PIL import Image
 
-FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "assets", "jury2")
+FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "screenshots", "jury2")
 
 # name of new figure: (source screenshot, (left, top, right, bottom))
 CROPS = {

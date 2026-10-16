@@ -12,7 +12,7 @@ Before running it, start the server in another terminal:
 
 Then run:
 
-    .venv\\Scripts\\python.exe docs\\capture_screenshots.py
+    .venv\\Scripts\\python.exe presentation\\jury1\\capture_screenshots.py
 """
 
 import os
@@ -21,7 +21,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 SERVER = "http://127.0.0.1:8000"
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "screenshots", "jury1")
 
 # The conversation used in the figures. Split into two sessions so the
 # screenshots can show memory surviving from one session into the next.

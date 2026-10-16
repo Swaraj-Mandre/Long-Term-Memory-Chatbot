@@ -5,7 +5,7 @@
 
 -r requirements.txt
 
-# Drives a headless browser to regenerate the screenshots in docs/assets.
+# Drives a headless browser to regenerate the screenshots in docs/screenshots.
 # After installing, also run:  python -m playwright install chromium
 playwright>=1.62.0
 
