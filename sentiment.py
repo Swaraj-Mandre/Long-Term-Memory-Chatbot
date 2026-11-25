@@ -42,6 +42,10 @@ class EmotionClassifier:
         self._pipeline = None
 
     def _load(self):
+        if self._pipeline is None and config.LIGHT_MODELS:
+            from light_models import LightEmotionModel
+            self._pipeline = LightEmotionModel()
+
         if self._pipeline is None:
             # Imported here so the rest of the project still starts quickly
             # even if this model is never used.

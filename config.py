@@ -142,8 +142,24 @@ CONCERN_STREAK = 3
 # 6. Web interface
 # ---------------------------------------------------------------------------
 
-WEB_HOST = "127.0.0.1"
+# PUBLIC_MODE is for the deployed link. It opens the app to the internet, so it
+# also gives each visitor their own memory and limits how many messages can be
+# sent (see web/visitors.py). Leave it off on your own computer.
+PUBLIC_MODE = os.getenv("PUBLIC_MODE", "false").strip().lower() == "true"
+
+WEB_HOST = "0.0.0.0" if PUBLIC_MODE else "127.0.0.1"
 WEB_PORT = int(os.getenv("PORT", "8000"))
+
+# Limits, used only in PUBLIC_MODE. They protect the API credit.
+MAX_MESSAGE_CHARS = 1000
+MAX_VISITORS = 30
+MESSAGES_PER_MINUTE = 8                                  # per visitor
+MESSAGES_PER_DAY = int(os.getenv("MESSAGES_PER_DAY", "300"))   # everyone together
+
+# LIGHT_MODELS swaps the two local models for small ONNX versions, because the
+# free server has only 512 MB of memory (see light_models.py).
+LIGHT_MODELS = os.getenv("LIGHT_MODELS", "false").strip().lower() == "true"
+MODELS_DIR = str(PROJECT_ROOT / "models")
 
 
 def check_configuration():
@@ -177,7 +193,12 @@ def check_configuration():
 # It is on by default because this project is judged on being explainable, and
 # the printout is the fastest way to show what the system really did rather
 # than what it appears to have done. Set DEBUG=false in .env to silence it.
-DEBUG_LOG = os.getenv("DEBUG", "true").strip().lower() not in ("0", "false", "no")
+#
+# Always off in PUBLIC_MODE: visitors' messages must not end up in server logs.
+DEBUG_LOG = (
+    not PUBLIC_MODE
+    and os.getenv("DEBUG", "true").strip().lower() not in ("0", "false", "no")
+)
 
 # Longest single value printed before it is cut short, so one large prompt
 # cannot fill the screen.

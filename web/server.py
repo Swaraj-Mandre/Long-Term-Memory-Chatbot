@@ -20,14 +20,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
-from chat_engine import ChatEngine
+import safety
+from web.visitors import Visitors, read_visitor_id
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
-# One shared chat engine for the whole server. The demo is single-user, so a
-# single engine is correct here. Supporting several users at once would mean
-# one engine per user, which is noted as a future extension.
-ENGINE = ChatEngine()
+# On your own computer this holds one chatbot. On the public link it holds one
+# per visitor, so people never see each other's memories (see visitors.py).
+VISITORS = Visitors()
+
+# Larger requests are refused. A normal message is far smaller than this.
+MAX_BODY_BYTES = 10000
 
 # Which file to serve for which address, and what type each one is.
 STATIC_FILES = {
@@ -55,8 +58,8 @@ def describe_tech_stack():
         {
             "part": "Emotion model",
             "value": config.EMOTION_MODEL.split("/")[-1],
-            "purpose": "Scores every message against 7 emotions. Runs on this "
-                       "machine and is cross-checked against the LLM.",
+            "purpose": "Scores every message against 7 emotions. Runs inside "
+                       "the app and is cross-checked against the LLM.",
         },
         {
             "part": "Safety",
@@ -74,8 +77,8 @@ def describe_tech_stack():
             "part": "Embeddings",
             "value": config.EMBEDDING_MODEL.split("/")[-1],
             "purpose": "Turns text into %d numbers so memories can be searched "
-                       "by meaning. Runs on this machine, so stored memories "
-                       "never leave it." % config.EMBEDDING_DIMENSIONS,
+                       "by meaning. Runs inside the app, so no outside "
+                       "service is used to search." % config.EMBEDDING_DIMENSIONS,
         },
         {
             "part": "Vector database",
@@ -99,7 +102,7 @@ def describe_tech_stack():
     ]
 
 
-def next_session_id():
+def next_session_id(engine):
     """
     Work out the next session number.
 
@@ -109,8 +112,8 @@ def next_session_id():
     """
     # Sessions can appear in the memory store, the mood log, or both (a
     # crisis-only session stores no memories), so look in both places.
-    names = [r.get("session_id", "") for r in ENGINE.memory.all_memories_for_display()]
-    names += [m.get("session_id", "") for m in ENGINE.moods.entries]
+    names = [r.get("session_id", "") for r in engine.memory.all_memories_for_display()]
+    names += [m.get("session_id", "") for m in engine.moods.entries]
 
     used_numbers = []
     for name in names:
@@ -129,6 +132,26 @@ class RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format_string, *args):
         """Silence the default request logging so the console stays readable."""
         pass
+
+    # -- who is asking ------------------------------------------------------
+    def find_visitor_id(self):
+        """Read this visitor's id. New visitors are given one in a cookie."""
+        self.new_cookie = None
+        visitor_id = read_visitor_id(self.headers.get("Cookie"))
+        if config.PUBLIC_MODE and visitor_id is None:
+            visitor_id = VISITORS.new_id()
+            self.new_cookie = (
+                "visitor=%s; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax"
+                % visitor_id
+            )
+        return visitor_id
+
+    def end_headers(self):
+        if getattr(self, "new_cookie", None):
+            self.send_header("Set-Cookie", self.new_cookie)
+            self.new_cookie = None
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
 
     # -- small helpers ------------------------------------------------------
     def send_json(self, status_code, data):
@@ -184,7 +207,30 @@ class RequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         if length == 0:
             return {}
-        return json.loads(self.rfile.read(length))
+        if length < 0 or length > MAX_BODY_BYTES:
+            raise ValueError("request too large")
+        data = json.loads(self.rfile.read(length))
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        return data
+
+    def read_message(self, data, visitor):
+        """
+        Get the chat message and check it may be answered.
+
+        Returns (message, None) or (None, reason). A crisis message always
+        goes through: it must be answered, and it does not use the LLM.
+        """
+        message = str(data.get("message") or "").strip()
+        if not message:
+            return None, "message was empty"
+        if config.PUBLIC_MODE:
+            message = message[:config.MAX_MESSAGE_CHARS]
+        if not safety.find_crisis_words(message):
+            reason = VISITORS.refuse_reason(visitor)
+            if reason:
+                return None, reason
+        return message, None
 
     # -- GET ----------------------------------------------------------------
     def do_GET(self):
@@ -192,22 +238,30 @@ class RequestHandler(BaseHTTPRequestHandler):
             filename, content_type = STATIC_FILES[self.path]
             return self.send_file(filename, content_type)
 
+        # Lets the host check the app is up without creating a visitor.
+        if self.path == "/api/health":
+            return self.send_json(200, {"ok": True})
+
+        if self.path not in ("/api/memories", "/api/status"):
+            return self.send_json(404, {"error": "unknown address"})
+
+        engine = VISITORS.look(self.find_visitor_id())
+
         if self.path == "/api/memories":
             return self.send_json(200, {
-                "memories": ENGINE.memory.all_memories_for_display(),
-                "summary": ENGINE.memory.summary(),
-                "moods": ENGINE.moods.recent(),
+                "memories": engine.memory.all_memories_for_display(),
+                "summary": engine.memory.summary(),
+                "moods": engine.moods.recent(),
             })
 
         if self.path == "/api/status":
             return self.send_json(200, {
-                "session_id": ENGINE.session_id,
+                "session_id": engine.session_id,
                 "api_key_present": bool(config.LLM_API_KEY),
-                "summary": ENGINE.memory.summary(),
+                "summary": engine.memory.summary(),
                 "stack": describe_tech_stack(),
+                "public": config.PUBLIC_MODE,
             })
-
-        return self.send_json(404, {"error": "unknown address"})
 
     # -- POST ---------------------------------------------------------------
     def do_POST(self):
@@ -216,24 +270,37 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return self.send_json(400, {"error": "request body was not valid JSON"})
 
+        if not self.path.startswith("/api/"):
+            return self.send_json(404, {"error": "unknown address"})
+
+        # One request at a time for each visitor, so a double click cannot
+        # mix two messages together.
+        visitor = VISITORS.get(self.find_visitor_id())
+        with visitor.lock:
+            self.answer_post(data, visitor)
+
+    def answer_post(self, data, visitor):
+        engine = visitor.engine
+
         if self.path == "/api/chat":
-            message = (data.get("message") or "").strip()
-            if not message:
-                return self.send_json(400, {"error": "message was empty"})
-            reply, details = ENGINE.send(message)
+            message, problem = self.read_message(data, visitor)
+            if problem:
+                return self.send_json(400, {"error": problem})
+            reply, details = engine.send(message)
             return self.send_json(200, {"reply": reply, "details": details})
 
         if self.path == "/api/chat/stream":
             # Same turn as /api/chat, but the reply is sent out as it is
             # written instead of after it is finished. /api/chat is kept as
             # well, so the interface still works if streaming is switched off.
-            message = (data.get("message") or "").strip()
-            if not message:
-                return self.send_json(400, {"error": "message was empty"})
+            message, problem = self.read_message(data, visitor)
+            if problem:
+                self.start_event_stream()
+                return self.send_event({"type": "error", "error": problem})
 
             self.start_event_stream()
             try:
-                for event in ENGINE.send_stream(message):
+                for event in engine.send_stream(message):
                     self.send_event(event)
             except (BrokenPipeError, ConnectionResetError):
                 # The user closed the tab or pressed reload mid-reply. Nothing
@@ -244,7 +311,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 # as a normal HTTP status code. It goes down the stream instead
                 # and the page shows it in the chat.
                 try:
-                    self.send_event({"type": "error", "error": str(error)})
+                    shown = "Something went wrong." if config.PUBLIC_MODE else str(error)
+                    self.send_event({"type": "error", "error": shown})
                 except OSError:
                     pass
             return
@@ -255,35 +323,36 @@ class RequestHandler(BaseHTTPRequestHandler):
             #
             # The number is worked out here rather than in the browser, because
             # only the server can see which sessions already exist.
-            ENGINE.start_new_session(next_session_id())
-            return self.send_json(200, {"session_id": ENGINE.session_id})
+            engine.start_new_session(next_session_id(engine))
+            return self.send_json(200, {"session_id": engine.session_id})
 
         if self.path == "/api/forget":
-            topic = (data.get("topic") or "").strip()
+            topic = str(data.get("topic") or "").strip()
             if not topic:
                 return self.send_json(400, {"error": "no topic given"})
-            removed = ENGINE.memory.forget(topic)
+            removed = engine.memory.forget(topic)
             return self.send_json(200, {
                 "removed": [
                     {"id": record["id"], "text": record["text"]}
                     for record in removed
                 ],
-                "summary": ENGINE.memory.summary(),
+                "summary": engine.memory.summary(),
             })
 
         if self.path == "/api/reset":
-            count = ENGINE.memory.wipe_everything()
-            ENGINE.moods.clear()
-            ENGINE.start_new_session("session-1")
+            count = engine.memory.wipe_everything()
+            engine.moods.clear()
+            engine.start_new_session("session-1")
             return self.send_json(200, {
                 "deleted": count,
-                "summary": ENGINE.memory.summary(),
+                "summary": engine.memory.summary(),
             })
 
         return self.send_json(404, {"error": "unknown address"})
 
 
 def run():
+    engine = VISITORS.shared
     problems = config.check_configuration()
 
     print("=" * 64)
@@ -294,7 +363,7 @@ def run():
     print("  Embedding model :", config.EMBEDDING_MODEL)
     print("  Emotion model   :", config.EMOTION_MODEL)
     print("  Memory database :", config.CHROMA_DIR)
-    print("  Stored memories :", ENGINE.memory.summary())
+    print("  Stored memories :", engine.memory.summary())
 
     if problems:
         print("-" * 64)
@@ -305,12 +374,13 @@ def run():
 
     # Every start of the program is a new conversation. Without this, a
     # restart would carry on as "session-1" and mix with that session's moods.
-    ENGINE.start_new_session(next_session_id())
-    print("  Session         :", ENGINE.session_id)
+    engine.start_new_session(next_session_id(engine))
+    print("  Session         :", engine.session_id)
 
-    # Load the emotion model now, so the first message is not slow.
-    print("  Loading the emotion model...")
-    ENGINE.emotion_model.classify("hello")
+    # Load the local models now, so the first message is not slow.
+    print("  Loading the local models...")
+    engine.emotion_model.classify("hello")
+    engine.memory.embedder.encode_one("hello")
 
     print("=" * 64)
     print("  Open http://%s:%d" % (config.WEB_HOST, config.WEB_PORT))

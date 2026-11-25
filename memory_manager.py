@@ -139,7 +139,7 @@ def clean_query(text):
 # The memory manager
 # ---------------------------------------------------------------------------
 class MemoryManager:
-    def __init__(self, store=None, embedder=None):
+    def __init__(self, store=None, embedder=None, counter_file=None):
         self.embedder = embedder or Embedder()
         self.store = store or ChromaVectorStore()
 
@@ -147,7 +147,7 @@ class MemoryManager:
         # readable ids make the demo far easier to follow than random strings.
         # The counter is kept in a small file so numbering continues correctly
         # after the program is restarted.
-        self._counter_file = os.path.join(config.CHROMA_DIR, "id_counter.json")
+        self._counter_file = counter_file or os.path.join(config.CHROMA_DIR, "id_counter.json")
         self._counter = self._load_counter()
 
     def _load_counter(self):
@@ -160,7 +160,7 @@ class MemoryManager:
     def _next_id(self):
         memory_id = "mem_%04d" % self._counter
         self._counter += 1
-        os.makedirs(config.CHROMA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(self._counter_file), exist_ok=True)
         with open(self._counter_file, "w", encoding="utf-8") as handle:
             json.dump({"next_id": self._counter}, handle)
         return memory_id

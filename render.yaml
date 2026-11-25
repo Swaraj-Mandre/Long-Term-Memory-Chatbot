@@ -1,0 +1,25 @@
+# Deployment settings for Render (https://render.com), free plan.
+#
+# The API key is NOT here. Render asks for it when the app is created, and
+# keeps it private.
+
+services:
+  - type: web
+    name: sentiment-aware-chatbot
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements-deploy.txt && python fetch_models.py
+    startCommand: python run.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14.10"
+      - key: PUBLIC_MODE
+        value: "true"
+      - key: LIGHT_MODELS
+        value: "true"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: ATLASCLOUD_API_KEY
+        sync: false

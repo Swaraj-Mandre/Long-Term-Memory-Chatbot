@@ -1,0 +1,11 @@
+# Packages for the deployed version (see render.yaml).
+#
+# Much smaller than requirements.txt: no PyTorch. The two local models run on
+# onnxruntime instead (see light_models.py).
+
+openai==3.6.0
+chromadb==1.5.9
+onnxruntime==1.29.0
+tokenizers==0.23.1
+numpy==2.5.2
+python-dotenv==1.2.3

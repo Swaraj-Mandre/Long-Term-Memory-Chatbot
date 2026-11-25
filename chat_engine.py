@@ -97,14 +97,15 @@ def remove_em_dashes(text):
 
 
 class ChatEngine:
-    def __init__(self, session_id="session-1", memory=None, llm=None):
+    def __init__(self, session_id="session-1", memory=None, llm=None,
+                 emotion_model=None, moods=None):
         self.session_id = session_id
         self.memory = memory or MemoryManager()
         self.llm = llm or LLMClient()
 
         # Jury 2: the local emotion model, and the record of past moods.
-        self.emotion_model = sentiment.EmotionClassifier()
-        self.moods = MoodLog()
+        self.emotion_model = emotion_model or sentiment.EmotionClassifier()
+        self.moods = moods or MoodLog()
 
         # Working memory: the last few messages, kept exactly as written.
         # This is a plain list in memory, so it is emptied when a new session
@@ -347,6 +348,8 @@ class ChatEngine:
                 "what I have stored:\n"
                 + "\n".join("- " + memory["text"] for memory in memories)
             )
+        if config.PUBLIC_MODE:      # visitors do not need the technical reason
+            return "I cannot reach the language model right now. Please try again."
         return "I cannot reach the language model right now (%s)." % error
 
     def send(self, message):

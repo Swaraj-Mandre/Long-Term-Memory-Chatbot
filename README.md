@@ -108,6 +108,23 @@ On macOS or Linux use `source .venv/bin/activate` and `cp .env.example .env`.
 
 ---
 
+## Put it online (free)
+
+The repo is ready for [Render](https://render.com)'s free plan.
+
+1. Sign in to Render with GitHub.
+2. Open [this deploy link](https://render.com/deploy?repo=https://github.com/Swaraj-Mandre/Long-Term-Memory-Chatbot).
+3. Paste your AtlasCloud API key when asked, then deploy.
+
+| Good to know | |
+|---|---|
+| Sleep | The free server sleeps after 15 idle minutes and is slow to wake |
+| Memory | Saved memories are cleared when it sleeps. On your own computer they stay |
+| Visitors | Each visitor gets their own memory, and messages are limited to protect the API credit |
+| Models | Small ONNX versions are used. The emotion model alone scores 81.0% instead of 83.3% on our test |
+
+---
+
 ## Demo in five messages
 
 Click a suggestion chip or type these:
@@ -139,9 +156,12 @@ moved. Use `/forget city` to delete a topic for good.
 ├── llm_client.py         DeepSeek v4 Flash via AtlasCloud
 ├── config.py             every setting in one place
 ├── run.py                start the app
+├── light_models.py       small models for the free server
+├── fetch_models.py       downloads those models
+├── render.yaml           deployment settings
 ├── test_connection.py    startup checks
 │
-├── web/                  server.py + static/ (HTML, CSS, JS)
+├── web/                  server.py, visitors.py + static/ (HTML, CSS, JS)
 ├── evaluation/           test sets and scoring scripts
 ├── docs/
 │   ├── screenshots/      jury1/ and jury2/ figures

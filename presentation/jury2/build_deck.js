@@ -10,6 +10,7 @@
   crop_figures.py, both in this folder.
 */
 
+const fs = require("fs");
 const path = require("path");
 const pptxgen = require("pptxgenjs");
 
@@ -132,9 +133,12 @@ function caption(s, value, x, y, w) {
   });
 }
 
-// A screenshot on a soft card, sized by width and keeping its proportions.
-function figure(s, file, x, y, w, ratio) {
-  const h = w / ratio;
+// A screenshot on a soft card, sized by width. The proportions are read from
+// the PNG itself (its width and height are bytes 16 to 23), so a new screenshot
+// is never stretched.
+function figure(s, file, x, y, w) {
+  const png = fs.readFileSync(path.join(FIGS, file));
+  const h = w * png.readUInt32BE(20) / png.readUInt32BE(16);
   s.addShape(pres.ShapeType.roundRect, {
     x: x - 0.06, y: y - 0.06, w: w + 0.12, h: h + 0.12, rectRadius: 0.08,
     fill: { color: WHITE }, line: { color: LINE, width: 0.75 },
@@ -245,27 +249,77 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   card(s, X, 2.7, CW, 1.35, AMBER_BG, "FCD9A4");
-  text(s, "A TYPICAL CHATBOT", { x: X + 0.25, y: 2.85, w: 4, h: 0.26, fontSize: 11, bold: true, color: AMBER, charSpacing: 1 });
+  text(s, "A TYPICAL CHATBOT  (EXAMPLE)", { x: X + 0.25, y: 2.85, w: 4, h: 0.26, fontSize: 11, bold: true, color: AMBER, charSpacing: 1 });
   text(s, "Here are some tips to do better next time: make a study timetable, solve previous papers, and revise every day.", {
     x: X + 0.25, y: 3.15, w: CW - 0.5, h: 1.0, fontSize: 14, color: INK,
   });
 
   card(s, X, 4.3, CW, 1.75, GREEN_BG, "A7F3D0");
   text(s, "OUR CHATBOT  (REAL OUTPUT)", { x: X + 0.25, y: 4.45, w: 5, h: 0.26, fontSize: 11, bold: true, color: GREEN, charSpacing: 1 });
-  text(s, "That's a heavy weight to carry. I'm sorry you're going through this. It's okay to feel crushed. You don't have to figure it all out alone. Is there someone you trust you can talk to?", {
+  text(s, "I'm sorry. That's a heavy weight to carry. It's okay to feel crushed right now. You don't have to figure everything out alone. Talking to someone you trust might help. There's also Tele-MANAS at 14416 if you ever need to talk.", {
     x: X + 0.25, y: 4.75, w: CW - 0.5, h: 1.2, fontSize: 14, color: INK,
   });
-  caption(s, "Same message, same facts. Only the reading of emotion is different.", X, 6.2, CW);
+  caption(s, "Same message, two replies. The first is an illustration, the second is from our app.", X, 6.2, CW);
 
   s.addNotes(
     "The problem is simple. A normal chatbot gives the same kind of reply whatever the user feels. " +
-    "On the right is the same message answered two ways. The top one is technically correct but feels cold. " +
+    "On the right is the same message answered two ways. The top one is an example we wrote: technically correct, but it feels cold. " +
     "The bottom one is the actual output of our system. It notices the user is low and responds gently."
   );
 }
 
 
-/* ===================================================== 3. PS 96 MAPPED */
+/* ======================================================== 3. GROUNDING */
+{
+  const s = contentSlide("Where this problem already shows up", "Grounding and scope");
+
+  text(s, "Industry, research and public health all face the same problem.", {
+    x: M, y: 1.6, w: 7.1, h: 0.34, fontSize: 14,
+  });
+
+  const examples = [
+    ["ChatGPT in sensitive conversations",
+      "OpenAI estimates that around 0.15% of weekly users have conversations with explicit signs of suicidal planning or intent.",
+      "OpenAI, Strengthening ChatGPT's responses in sensitive conversations, October 2025"],
+    ["EmpatheticDialogues",
+      "Research that names recognising the user's feelings and replying accordingly as a challenge for dialogue systems. 25k conversations.",
+      "Rashkin et al., arXiv:1811.00207"],
+    ["Tele-MANAS, India",
+      "The national mental health helpline, 14416, received over 10 lakh calls between October 2022 and May 2024.",
+      "Ministry of Health and Family Welfare, PIB release 2022057, May 2024"],
+  ];
+  examples.forEach(([name, what, source], i) => {
+    const y = 2.16 + i * 1.5;
+    card(s, M, y, 7.1, 1.38);
+    badge(s, M + 0.26, y + 0.24, String(i + 1));
+    text(s, name, { x: M + 0.85, y: y + 0.16, w: 6.0, h: 0.3, fontSize: 14.5, bold: true, color: NAVY });
+    text(s, what, { x: M + 0.85, y: y + 0.48, w: 6.05, h: 0.54, fontSize: 12.5, color: MUTED });
+    text(s, source, { x: M + 0.85, y: y + 1.05, w: 6.05, h: 0.24, fontSize: 10.5, italic: true, color: FAINT });
+  });
+
+  card(s, 8.06, 1.6, RIGHT - 8.06, 4.94, ICE, ICE);
+  text(s, "What our system had to do", { x: 8.34, y: 1.84, w: 4.1, h: 0.32, fontSize: 15, bold: true, color: NAVY });
+  [
+    "Read the user's emotion in every message",
+    "Change the tone of the reply to match",
+    "Notice distress and respond with real helplines",
+    "Remember how the user felt in earlier sessions",
+    "Show why each reply was written",
+  ].forEach((job, i) => {
+    const y = 2.45 + i * 0.78;
+    dot(s, 8.36, y + 0.09, GREEN, 0.13);
+    text(s, job, { x: 8.66, y, w: 3.8, h: 0.7, fontSize: 14 });
+  });
+
+  s.addNotes(
+    "The problem is real. OpenAI reports that about 0.15 percent of weekly ChatGPT users show explicit signs of suicidal planning or intent. " +
+    "Research on empathetic dialogue calls reading feelings a challenge for dialogue systems. In India, the Tele-MANAS helpline received over ten lakh calls by May 2024. " +
+    "The right side lists what our system had to do."
+  );
+}
+
+
+/* ===================================================== 4. PS 96 MAPPED */
 {
   const s = contentSlide("Every step of PS 96, and where it lives", "Problem statement");
 
@@ -296,7 +350,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ===================================================== 4. JURY 1 + 2 */
+/* ===================================================== 5. JURY 1 + 2 */
 {
   const s = contentSlide("Built on our Jury 1 memory chatbot", "Starting point");
 
@@ -344,7 +398,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ===================================================== 5. ARCHITECTURE */
+/* ===================================================== 6. ARCHITECTURE */
 {
   const s = contentSlide("How one message travels through the system", "Architecture");
 
@@ -375,7 +429,7 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   const notes = [
-    ["One call, two jobs", "The same LLM call reads the facts and the emotion, so emotion adds no extra wait."],
+    ["One call, two jobs", "The same LLM call reads the facts and the emotion, so emotion needs no extra LLM call."],
     ["Safety comes first", "The crisis check runs before any model, so it works even without internet."],
     ["Explained live", "Emotion, tone and memory appear on screen before the reply is written."],
   ];
@@ -388,12 +442,12 @@ function stage(s, x, y, w, h, title, sub, style) {
   s.addNotes(
     "Every message follows this path. First, a crisis check using fixed rules. If it finds crisis wording, the bot skips the LLM and shows a fixed safe reply. " +
     "Otherwise, two readers detect the emotion, we pick a safety level and a tone, search memory, and the LLM writes the reply in that tone. " +
-    "Emotion detection adds no delay, because the same LLM call that extracts facts also reads the emotion."
+    "Emotion detection needs no extra LLM call, because the same LLM call that extracts facts also reads the emotion."
   );
 }
 
 
-/* ================================================ 6. DETECTING EMOTION */
+/* ================================================ 7. DETECTING EMOTION */
 {
   const s = contentSlide("Two readers, one decision", "Step 2, detecting emotion");
 
@@ -426,19 +480,19 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   const fx = 7.75, fw = RIGHT - fx;
-  const fh = figure(s, "fig_emotion_disagree.png", fx, 1.85, fw, 720 / 487);
+  const fh = figure(s, "fig_emotion_disagree.png", fx, 1.85, fw);
   caption(s, "Real case: \"Great, another rejection email.\" The local model sees the word great. The LLM reads the feeling behind it.",
     fx, 1.85 + fh + 0.2, fw);
 
   s.addNotes(
     "This answers the first jury question. We do not trust a single reader. A local emotion model scores every message against seven emotions. " +
     "The LLM reads the same message with context. When they agree we are confident. When they disagree, we use the LLM and the screen shows the disagreement. " +
-    "The screenshot is a real sarcastic message. The local model said joy because of the word great. The LLM read the real feeling behind it, frustration, so the bot replied calmly instead of cheerfully."
+    "The screenshot is a real sarcastic message. The local model said joy because of the word great. The LLM read the real feeling behind it, sadness, so the bot replied gently instead of cheerfully."
   );
 }
 
 
-/* =================================================== 7. ADAPTING TONE */
+/* =================================================== 8. ADAPTING TONE */
 {
   const s = contentSlide("The emotion decides how the reply is written", "Step 3, adapting tone");
 
@@ -470,17 +524,17 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   const fx = 7.55, fw = RIGHT - fx;
-  const fh = figure(s, "chat_tones.png", fx, 1.85, fw, 1800 / 1280);
+  const fh = figure(s, "chat_tones.png", fx, 1.85, fw);
   caption(s, "Three messages, three tones. The tag under each reply shows the tone used.", fx, 1.85 + fh + 0.2, fw);
 
   s.addNotes(
     "Once we know the emotion, a simple lookup table picks the tone. Each tone is one instruction, which we add to the system prompt. " +
-    "On the right are three real replies from one conversation: cheerful for good news, calm for a frustrating rejection, and gentle with a check-in when the user kept feeling low."
+    "On the right are three real replies from one conversation: cheerful for good news, gentle for a rejection, and gentle with a check-in when the user kept feeling low."
   );
 }
 
 
-/* ================================================ 8. DISTRESS LEVELS */
+/* ================================================ 9. DISTRESS LEVELS */
 {
   const s = contentSlide("Three levels of care", "Step 5, escalation for distress");
 
@@ -492,8 +546,8 @@ function stage(s, x, y, w, h, title, sub, style) {
       "Three negative messages in a row, or the LLM sees the user is struggling",
       "Gentle check-in. Mentions that help is available, such as Tele-MANAS 14416."],
     ["2", "Crisis", RED, RED_BG, "FECDD3",
-      "Words about self-harm or not wanting to live",
-      "Skips the LLM. Shows a fixed reply with helplines. The message is not stored."],
+      "Words about self-harm or not wanting to live, or the LLM flags a possible crisis",
+      "The LLM does not write the reply. A fixed reply with helplines is shown. The message is not stored."],
   ];
 
   const cw = 3.85, gap = 0.27;
@@ -518,18 +572,18 @@ function stage(s, x, y, w, h, title, sub, style) {
 
   s.addNotes(
     "This answers the second jury question. There are three levels. Normal only changes the tone. Concern adds a gentle check-in. " +
-    "Crisis is different: fixed rules catch self-harm wording, the LLM is skipped completely, and a reviewed reply with helpline numbers is shown. " +
+    "Crisis is different: fixed rules catch self-harm wording before any model runs, and a fixed reply with helpline numbers is shown. If the rules miss indirect wording, the LLM can still flag it, and the same fixed reply is used. " +
     "We do this because a crisis reply must never depend on a model behaving well or a network being up."
   );
 }
 
 
-/* =================================================== 9. CRISIS IN APP */
+/* =================================================== 10. CRISIS IN APP */
 {
   const s = contentSlide("What the user sees in a crisis", "Step 5, in the app");
 
   const lw = 7.55;
-  const lh = figure(s, "chat_crisis.png", M, 1.85, lw, 1800 / 792);
+  const lh = figure(s, "chat_crisis.png", M, 1.85, lw);
 
   const points = [
     ["Helplines first", "Large numbers that can be read at a glance"],
@@ -544,7 +598,7 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   const fx = 9.0, fw = RIGHT - fx;
-  const fh = figure(s, "fig_crisis_panel.png", fx, 1.85, fw, 720 / 887);
+  const fh = figure(s, "fig_crisis_panel.png", fx, 1.85, fw);
   caption(s, "The LLM was skipped. The matched phrase is shown.", fx, 1.85 + fh + 0.16, fw);
 
   s.addNotes(
@@ -554,16 +608,16 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ===================================================== 10. MOOD MEMORY */
+/* ===================================================== 11. MOOD MEMORY */
 {
   const s = contentSlide("It remembers how you felt, not only what you said", "Long-term memory of emotion");
 
   const lw = 7.55;
-  const lh = figure(s, "chat_follow_up.png", M, 1.85, lw, 1800 / 548);
+  const lh = figure(s, "chat_follow_up.png", M, 1.85, lw);
   caption(s, "A new session clears recent messages. The bot still recalls the internship from long-term memory.", M, 1.85 + lh + 0.18, lw);
 
   const ty = 1.85 + lh + 0.85;
-  const th = figure(s, "fig_timeline.png", M, ty, 5.2, 730 / 110);
+  const th = figure(s, "fig_timeline.png", M, ty, 5.2);
   caption(s, "Each dot is one message. S1 and S2 are separate sessions. The ring marks a crisis.", M, ty + th + 0.2, lw);
 
   const X = 8.75, cw = RIGHT - X;
@@ -587,7 +641,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ===================================================== 11. EVALUATION */
+/* ===================================================== 12. EVALUATION */
 {
   const s = contentSlide("Results", "Step 4, testing");
 
@@ -604,7 +658,7 @@ function stage(s, x, y, w, h, title, sub, style) {
     text(s, label.toUpperCase(), { x: x + 0.1, y: y + 0.88, w: 2.65, h: 0.4, fontSize: 10.5, color: MUTED, align: "center", charSpacing: 0.6 });
   });
 
-  text(s, "42 messages, 6 for each of the 7 emotions. The correct label for each was written before any test was run. 7 of them are hard: sarcasm and mixed feelings. False alarms were tested on everyday phrases such as \"this traffic is killing me\".", {
+  text(s, "42 messages, 6 for each of the 7 emotions. The classes are balanced, so accuracy is a fair measure. Macro F1 is 0.976. Each label was written before any test was run. 7 of them are hard: sarcasm and mixed feelings. False alarms were tested on everyday phrases such as \"this traffic is killing me\".", {
     x: M, y: 5.2, w: 5.95, h: 1.4, fontSize: 13, color: MUTED,
   });
 
@@ -632,7 +686,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ============================================== 12. JURY QUESTIONS */
+/* ============================================== 13. JURY QUESTIONS */
 {
   const s = contentSlide("Answers to the two key questions", "Questions from PS 96");
 
@@ -644,7 +698,7 @@ function stage(s, x, y, w, h, title, sub, style) {
     ]],
     ["Q2", "How do you handle a distressed user safely?", [
       "Fixed rules check every message before any model runs",
-      "A crisis gets a reviewed reply with helplines, never a generated one",
+      "A crisis gets a fixed reply with helplines, never a generated one",
       "Measured: 10 of 10 crisis messages caught, 0 of 8 false alarms",
     ]],
   ];
@@ -669,7 +723,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ==================================================== 13. LIMITATIONS */
+/* ==================================================== 14. LIMITATIONS */
 {
   const s = contentSlide("Limitations and next steps", "Being honest");
 
@@ -706,7 +760,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 }
 
 
-/* ==================================================== 14. TECH STACK */
+/* ==================================================== 15. TECH STACK */
 {
   const s = contentSlide("Tech stack", "Tools and models");
 
@@ -731,13 +785,55 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   s.addNotes(
-    "Our stack in one view. Two models run on our own machine, the emotion model and the embedding model, so stored memories never leave it. " +
+    "Our stack in one view. Two models run on our own machine, the emotion model and the embedding model, and the memory store stays on disk here. Only the current message and the few memories found for it are sent to the LLM. " +
     "The LLM is DeepSeek v4 Flash, served through AtlasCloud."
   );
 }
 
 
-/* ===================================================== 15. CLOSING */
+/* ================================================ 16. SYLLABUS MAPPING */
+{
+  const s = contentSlide("Syllabus concepts behind this project", "Foundations");
+
+  const rows = [
+    ["Transformer encoder", "Unit 2", "DistilRoBERTa turns each message into scores for 7 emotions.",
+      "Liu et al., arXiv:1907.11692. Sanh et al., arXiv:1910.01108"],
+    ["Transfer learning", "Unit 2", "We use a model already fine-tuned on nearly 20k labelled texts. We did not train it.",
+      "Hartmann, 2022, Hugging Face model card"],
+    ["Prompt engineering", "Unit 1", "One prompt returns facts, emotion and risk as JSON. Tone rules go in the system prompt.",
+      "Our code: chat_engine.py, tone.py"],
+    ["Text embeddings", "Unit 2", "Each memory becomes 384 numbers, so search works by meaning.",
+      "Reimers and Gurevych, arXiv:1908.10084"],
+    ["Retrieval augmented generation", "Unit 2", "Memories found for this message are added to the prompt before the reply.",
+      "Lewis et al., arXiv:2005.11401"],
+    ["Ethics and safety", "Unit 5", "Fixed crisis rules, real helplines, and private details removed before saving.",
+      "Our code: safety.py, memory_manager.py"],
+  ];
+
+  const cols = [M + 0.24, M + 3.75, M + 8.15];
+  card(s, M, 1.6, RIGHT - M, 0.44, NAVY, NAVY);
+  ["CONCEPT", "WHERE IT IS USED", "SOURCE"].forEach((head, i) => {
+    text(s, head, { x: cols[i], y: 1.6, w: 3.4, h: 0.44, fontSize: 11, bold: true, color: WHITE, charSpacing: 0.7, valign: "middle" });
+  });
+  rows.forEach(([concept, unit, use, source], i) => {
+    const y = 2.12 + i * 0.77;
+    card(s, M, y, RIGHT - M, 0.7, i % 2 ? WHITE : CARD);
+    text(s, [
+      { text: concept, options: { bold: true, color: NAVY, fontSize: 13.5, breakLine: true } },
+      { text: unit, options: { color: FAINT, fontSize: 11 } },
+    ], { x: cols[0], y, w: 3.35, h: 0.7, valign: "middle" });
+    text(s, use, { x: cols[1], y, w: 4.2, h: 0.7, fontSize: 12.5, valign: "middle" });
+    text(s, source, { x: cols[2], y, w: 3.75, h: 0.7, fontSize: 11, color: MUTED, valign: "middle" });
+  });
+
+  s.addNotes(
+    "This slide maps our work to the syllabus. Each row is a concept, where it appears in our system, and its source. " +
+    "Be ready to be questioned on any row. The emotion model is pre-trained. We did not train it."
+  );
+}
+
+
+/* ===================================================== 17. CLOSING */
 {
   const s = pres.addSlide();
   s.background = { color: NAVY };

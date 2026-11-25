@@ -167,7 +167,7 @@ async function sendMessage(event) {
       if (tone && !isCrisis) setTag(bot.tag, "tone: " + escapeHtml(tone.name));
       if (isCrisis) setTag(bot.tag, "fixed safe reply &middot; no AI generation");
     } else if (event.type === "error") {
-      addText("\n\nError: " + event.error);
+      addText(text ? "\n\n" + event.error : event.error);
     }
   }
 
@@ -511,6 +511,7 @@ fetch("/api/status")
   .then(function (status) {
     el("chipSession").textContent = status.session_id;
     fillStackPanel(status.stack);
+    el("publicNote").hidden = !status.public;
 
     // If there is no key the bot cannot reply, so say so plainly rather than
     // letting it look broken.

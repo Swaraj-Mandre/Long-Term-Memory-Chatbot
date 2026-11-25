@@ -31,8 +31,12 @@ class Embedder:
 
     def _load(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self.model_name)
+            if config.LIGHT_MODELS:
+                from light_models import LightEmbeddingModel
+                self._model = LightEmbeddingModel()
+            else:
+                from sentence_transformers import SentenceTransformer
+                self._model = SentenceTransformer(self.model_name)
         return self._model
 
     def encode(self, texts):
