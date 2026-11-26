@@ -420,7 +420,7 @@ function stage(s, x, y, w, h, title, sub, style) {
     ["Read emotion", "Local model and LLM, combined"],
     ["Safety and tone", "Pick the level and the tone"],
     ["Search memory", "ChromaDB, by meaning"],
-    ["Write the reply", "DeepSeek v4 Flash, streamed"],
+    ["Write the reply", "GPT-OSS 120B on Groq, streamed"],
   ];
   flow.forEach(([head, sub], i) => {
     const x = x2 + i * (bw + gap);
@@ -453,7 +453,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 
   const readers = [
     ["Local emotion model", "DistilRoBERTa, 7 emotions", "Runs on this machine, free and repeatable", "Reads words, so sarcasm can fool it"],
-    ["Large language model", "DeepSeek v4 Flash", "Reads the situation, catches sarcasm", "Needs the network, can be slow"],
+    ["Large language model", "GPT-OSS 120B on Groq", "Reads the situation, catches sarcasm", "Needs the network, free plan has a daily limit"],
   ];
   readers.forEach(([head, model, good, weak], i) => {
     const x = M + i * 3.35, cw = 3.15;
@@ -646,7 +646,7 @@ function stage(s, x, y, w, h, title, sub, style) {
   const s = contentSlide("Results", "Step 4, testing");
 
   const tiles = [
-    ["97.6%", "Emotion accuracy", NAVY],
+    ["42 / 42", "Emotion accuracy", NAVY],
     ["7 / 7", "Sarcastic or mixed messages", NAVY],
     ["10 / 10", "Crisis messages caught", GREEN],
     ["0 / 8", "False alarms", GREEN],
@@ -658,12 +658,12 @@ function stage(s, x, y, w, h, title, sub, style) {
     text(s, label.toUpperCase(), { x: x + 0.1, y: y + 0.88, w: 2.65, h: 0.4, fontSize: 10.5, color: MUTED, align: "center", charSpacing: 0.6 });
   });
 
-  text(s, "42 messages, 6 for each of the 7 emotions. The classes are balanced, so accuracy is a fair measure. Macro F1 is 0.976. Each label was written before any test was run. 7 of them are hard: sarcasm and mixed feelings. False alarms were tested on everyday phrases such as \"this traffic is killing me\".", {
+  text(s, "42 messages, 6 for each of the 7 emotions. The classes are balanced, so accuracy is a fair measure. Macro F1 is 1.0, the same in two runs. A small set, so this means no mistakes here, not a perfect model. 7 of them are hard: sarcasm and mixed feelings. False alarms were tested on everyday phrases such as \"this traffic is killing me\".", {
     x: M, y: 5.2, w: 5.95, h: 1.4, fontSize: 13, color: MUTED,
   });
 
   s.addChart(pres.ChartType.bar, [
-    { name: "All 42 messages", labels: ["Local model alone", "LLM alone", "Combined (used by bot)"], values: [83.3, 97.6, 97.6] },
+    { name: "All 42 messages", labels: ["Local model alone", "LLM alone", "Combined (used by bot)"], values: [83.3, 100, 100] },
     { name: "7 hard messages", labels: ["Local model alone", "LLM alone", "Combined (used by bot)"], values: [28.6, 100, 100] },
   ], {
     x: 7.05, y: 1.75, w: RIGHT - 7.05, h: 4.85,
@@ -679,7 +679,7 @@ function stage(s, x, y, w, h, title, sub, style) {
   });
 
   s.addNotes(
-    "We tested on 42 labelled messages, with the answers written down before testing. The combined system scores 97.6 percent. " +
+    "We tested on 42 labelled messages, with the answers written down before testing. The combined system got all 42 right, in two separate runs. The set is small, so we read that as no mistakes on our test, not as a perfect model. " +
     "The local model alone scores 83.3 percent, and gets only 2 of the 7 hard messages right. With the LLM, all 7 are correct. " +
     "The safety rules caught all 10 crisis messages and raised no false alarm on 8 everyday phrases."
   );
@@ -694,7 +694,7 @@ function stage(s, x, y, w, h, title, sub, style) {
     ["Q1", "How do you detect sentiment reliably?", [
       "Two independent readers: a local emotion model and the LLM",
       "When they disagree, the LLM decides and the screen shows it",
-      "Measured: 97.6% on 42 labelled messages, and all 7 hard cases correct",
+      "Measured: 42 of 42 labelled messages correct, including all 7 hard cases",
     ]],
     ["Q2", "How do you handle a distressed user safely?", [
       "Fixed rules check every message before any model runs",
@@ -765,7 +765,7 @@ function stage(s, x, y, w, h, title, sub, style) {
   const s = contentSlide("Tech stack", "Tools and models");
 
   const parts = [
-    ["Language model", "DeepSeek v4 Flash", "Reads facts and emotion, writes the reply"],
+    ["Language model", "GPT-OSS 120B", "On Groq's free plan. Reads facts and emotion, writes the reply"],
     ["Emotion model", "DistilRoBERTa", "7 emotions, runs on this machine"],
     ["Embeddings", "all-MiniLM-L6-v2", "Searches memory by meaning, runs locally"],
     ["Vector database", "ChromaDB", "Keeps long-term memory on disk"],
@@ -786,7 +786,7 @@ function stage(s, x, y, w, h, title, sub, style) {
 
   s.addNotes(
     "Our stack in one view. Two models run on our own machine, the emotion model and the embedding model, and the memory store stays on disk here. Only the current message and the few memories found for it are sent to the LLM. " +
-    "The LLM is DeepSeek v4 Flash, served through AtlasCloud."
+    "The LLM is GPT-OSS 120B, an open-weight model served free by Groq."
   );
 }
 
@@ -857,8 +857,20 @@ function stage(s, x, y, w, h, title, sub, style) {
     isTextBox: true, margin: 0,
   });
 
+  // The live demo, deployed on Render's free plan.
+  s.addShape(pres.ShapeType.roundRect, {
+    x: M + 0.15, y: 5.0, w: 7.6, h: 0.55, rectRadius: 0.27,
+    fill: { color: NAVY_SOFT }, line: { color: "3D4C8C", width: 0.75 },
+  });
+  s.addText("Live demo:  sentiment-aware-chatbot-9yys.onrender.com", {
+    x: M + 0.15, y: 5.0, w: 7.6, h: 0.55,
+    fontFace: BODY, fontSize: 15, color: WHITE, align: "center", valign: "middle",
+    isTextBox: true, margin: 0,
+    hyperlink: { url: "https://sentiment-aware-chatbot-9yys.onrender.com" },
+  });
+
   s.addText("Swaraj Mandre   |   Saumya Joshi   |   Siddhant Pawar", {
-    x: M + 0.15, y: 5.5, w: 11, h: 0.35,
+    x: M + 0.15, y: 6.05, w: 11, h: 0.35,
     fontFace: BODY, fontSize: 14, color: ICE, isTextBox: true, margin: 0,
   });
 

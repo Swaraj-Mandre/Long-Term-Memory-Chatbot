@@ -16,6 +16,8 @@ down and speaks gently. Come back next week and it asks how the exam went.
 > **Jury 1:** Topic 192, Chatbot with Long-Term Memory.
 > **Jury 2:** PS 96, Sentiment-Aware Chatbot, built on top of Jury 1.
 
+**Live demo:** [sentiment-aware-chatbot-9yys.onrender.com](https://sentiment-aware-chatbot-9yys.onrender.com) (free server: give it a minute to wake up)
+
 ![The app: chat on the left, "why this reply" on the right](docs/screenshots/jury2/02_concern.png)
 
 ---

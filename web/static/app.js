@@ -14,6 +14,11 @@
 // Short helper for finding an element by id.
 const el = (id) => document.getElementById(id);
 
+// Finishes when the page's first call to the server is done. On the public
+// link that call also gives the visitor their id cookie, so a message sent
+// before it finished would arrive with no id.
+let pageReady = Promise.resolve();
+
 // Escape text before putting it into HTML, so a message containing < or >
 // cannot break the page or inject markup.
 function escapeHtml(text) {
@@ -108,6 +113,7 @@ async function sendMessage(event) {
   const input = el("messageInput");
   const message = input.value.trim();
   if (!message) return;
+  await pageReady;
   input.value = "";
 
   // "/forget <topic>" is handled separately - it deletes rather than chats.
@@ -506,18 +512,19 @@ el("stackMenu").addEventListener("mouseleave", function () {
 });
 
 // Fill in the current state as soon as the page opens.
-fetch("/api/status")
+pageReady = fetch("/api/status")
   .then((response) => response.json())
   .then(function (status) {
     el("chipSession").textContent = status.session_id;
     fillStackPanel(status.stack);
-    el("publicNote").hidden = !status.public;
+    if (el("publicNote")) el("publicNote").hidden = !status.public;
 
     // If there is no key the bot cannot reply, so say so plainly rather than
     // letting it look broken.
     if (!status.api_key_present) {
       el("stackToggle").firstChild.textContent = "no API key ";
     }
-  });
+  })
+  .catch(function () {});   // a failed check must not block sending
 
 loadMemories();
