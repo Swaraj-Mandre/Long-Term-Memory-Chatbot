@@ -1,26 +1,26 @@
 """
 Talks to the language model.
 
-The model is DeepSeek v4 Flash, served by AtlasCloud.
+The model is GPT-OSS 120B, served by Groq.
 
 We use the official `openai` Python library here, but note what that does and
 does not mean:
 
-  - We are NOT calling OpenAI's models. Not one request goes to OpenAI.
+  - We are NOT calling OpenAI's servers. Not one request goes to OpenAI.
+    (GPT-OSS is an open-weight model that OpenAI released; Groq runs it.)
   - OpenAI's "chat completions" request format became the standard that most
     providers copied, so their library can talk to any provider that follows
-    it. AtlasCloud does.
+    it. Groq does.
 
-The library is pointed at AtlasCloud by setting `base_url`. Switching to a
-different provider later means changing the URL and model name in config.py
-and nothing else in the project.
+The library is pointed at Groq by setting `base_url`. Switching to a different
+provider later means changing the URL and model name in config.py and nothing
+else in the project.
 
 Why use the library rather than building the HTTP request by hand:
-  - it retries automatically when a request fails for a temporary reason
+  - it retries automatically when a request fails for a temporary reason,
+    including waiting out a free-plan rate limit
   - it raises clear, separate errors for authentication, rate limits and
     connection problems, instead of one generic HTTP error
-  - it sets its own headers correctly, which matters because AtlasCloud sits
-    behind Cloudflare and Cloudflare rejects requests that look automated
 """
 
 import openai
@@ -45,8 +45,8 @@ class LLMClient:
     def __init__(self, api_key=None, base_url=None, model=None):
         self.model = model or config.LLM_MODEL
 
-        # This is the line that points the OpenAI library at AtlasCloud
-        # instead of at OpenAI.
+        # This is the line that points the OpenAI library at Groq instead of
+        # at OpenAI.
         self.client = openai.OpenAI(
             api_key=api_key or config.LLM_API_KEY or "missing-key",
             base_url=base_url or config.LLM_BASE_URL,
@@ -63,7 +63,7 @@ class LLMClient:
     # -----------------------------------------------------------------------
     def _send(self, messages, temperature, max_tokens, purpose="model call"):
         if not config.LLM_API_KEY:
-            raise LLMError("No API key. Set ATLASCLOUD_API_KEY in your .env file.")
+            raise LLMError("No API key. Set GROQ_API_KEY in your .env file.")
 
         # Print the exact request before sending it, so what the model actually
         # received is never a guess.
@@ -75,6 +75,7 @@ class LLMClient:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                reasoning_effort=config.REASONING_EFFORT,
                 stream=False,
             )
 
@@ -112,7 +113,7 @@ class LLMClient:
         # than mysterious.
         debug_log.llm_response(
             content=content,
-            reasoning=getattr(choice.message, "reasoning_content", None),
+            reasoning=reasoning_of(choice.message),
             usage=_usage_as_dict(response.usage),
             finish_reason=choice.finish_reason,
         )
@@ -163,13 +164,11 @@ class LLMClient:
             {"type": "end",      "usage": ..., "text": full answer}
 
         Worth knowing: this model reasons before it answers, and the reasoning
-        streams first. Measured on a short question, reasoning began at 2.9
-        seconds and the first word of the answer at 3.4 seconds. So the useful
-        part of streaming here is not speed on short replies, it is being able
-        to show honestly that the model is thinking rather than stalled.
+        streams first. So streaming also lets us show honestly that the model
+        is thinking rather than stalled.
         """
         if not config.LLM_API_KEY:
-            raise LLMError("No API key. Set ATLASCLOUD_API_KEY in your .env file.")
+            raise LLMError("No API key. Set GROQ_API_KEY in your .env file.")
 
         temperature = config.CHAT_TEMPERATURE if temperature is None else temperature
         max_tokens = config.CHAT_MAX_TOKENS if max_tokens is None else max_tokens
@@ -183,6 +182,7 @@ class LLMClient:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                reasoning_effort=config.REASONING_EFFORT,
                 stream=True,
                 # Without this the final usage numbers are not sent.
                 stream_options={"include_usage": True},
@@ -202,7 +202,7 @@ class LLMClient:
 
                 delta = chunk.choices[0].delta
 
-                thinking = getattr(delta, "reasoning_content", None)
+                thinking = reasoning_of(delta)
                 if thinking:
                     reasoning.append(thinking)
                     yield {"type": "thinking", "text": thinking}
@@ -213,6 +213,8 @@ class LLMClient:
 
         except openai.AuthenticationError as error:
             raise LLMError("The API rejected the key (401): %s" % error)
+        except openai.RateLimitError as error:
+            raise LLMError("The free plan's limit was reached (429). Wait and retry: %s" % error)
         except openai.APIConnectionError as error:
             raise LLMError("Could not reach the server: %s" % error)
         except openai.APIError as error:
@@ -257,6 +259,16 @@ class LLMClient:
         parsed = parse_json_from_text(raw)
         debug_log.as_json("parsed into", parsed)
         return parsed
+
+
+def reasoning_of(message):
+    """
+    The model's internal thinking, if the provider sent it.
+
+    Providers name this field differently: Groq uses "reasoning", others use
+    "reasoning_content". It is only ever printed, never shown to the user.
+    """
+    return getattr(message, "reasoning", None) or getattr(message, "reasoning_content", None)
 
 
 def _usage_as_dict(usage):

@@ -196,7 +196,7 @@ class ChatEngine:
             "- If they ask something these notes do not cover, say you do not "
             "know rather than guessing.\n"
             "- Keep replies under 80 words.\n"
-            "- Write in plain, simple sentences. Do not use em dashes."
+            "- Write in plain, simple sentences. Do not use em dashes or emoji."
         )
 
         if mood and tone:

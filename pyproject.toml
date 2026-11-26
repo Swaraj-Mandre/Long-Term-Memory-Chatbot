@@ -6,8 +6,8 @@ requires-python = ">=3.11"
 
 dependencies = [
     # Client library for the language model. Note this does NOT mean we call
-    # OpenAI's models - the library is pointed at AtlasCloud, which serves
-    # DeepSeek v4 Flash using the same request format.
+    # OpenAI's servers - the library is pointed at Groq, which serves
+    # GPT-OSS 120B using the same request format.
     "openai>=3.6.0",
 
     # Vector database. Stores memory embeddings on disk and, crucially, lets us

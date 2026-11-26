@@ -136,7 +136,7 @@ def llm_response(content, reasoning=None, usage=None, finish_reason=None):
     if finish_reason:
         field("finish reason", finish_reason)
 
-    # DeepSeek v4 Flash thinks before it answers. That thinking is billed and
+    # GPT-OSS thinks before it answers. That thinking is billed and
     # is worth seeing, because it explains an empty answer when the token
     # budget runs out during it.
     if reasoning:

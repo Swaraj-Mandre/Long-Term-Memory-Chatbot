@@ -7,7 +7,7 @@ down and speaks gently. Come back next week and it asks how the exam went.
 
 <p>
 <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-1E2761">
-<img alt="LLM" src="https://img.shields.io/badge/LLM-DeepSeek%20v4%20Flash-B45309">
+<img alt="LLM" src="https://img.shields.io/badge/LLM-GPT--OSS%20120B%20on%20Groq-B45309">
 <img alt="Emotion" src="https://img.shields.io/badge/Emotion-DistilRoBERTa-7C3AED">
 <img alt="ChromaDB" src="https://img.shields.io/badge/Vector%20DB-ChromaDB-047857">
 </p>
@@ -44,7 +44,7 @@ flowchart LR
     S -- no --> R[Read emotion<br/>local model + LLM]
     R --> T[Pick safety level<br/>and tone]
     T --> M[Search memory<br/>ChromaDB]
-    M --> W[Write the reply<br/>DeepSeek v4 Flash]
+    M --> W[Write the reply<br/>GPT-OSS 120B on Groq]
 ```
 
 **Two readers, one decision**
@@ -69,12 +69,14 @@ flowchart LR
 
 | Test | Result |
 |---|---|
-| Emotion accuracy, 42 labelled messages | **97.6%** |
+| Emotion accuracy, 42 labelled messages | **100%** (42 of 42, same in two runs) |
 | Sarcasm and mixed feelings | **7 of 7** |
 | Crisis messages caught | **10 of 10** |
 | False alarms ("this traffic is killing me") | **0 of 8** |
 | Memory recall, 22 questions | **22 of 22** ranked first |
 | Contradictions handled | **4 of 4** |
+
+The test set is small, so read 100% as "no mistakes on our 42 messages", not as perfect. The local model alone scores 83.3%.
 
 Full output: [sentiment](docs/results/sentiment_evaluation.txt) and
 [memory](docs/results/memory_evaluation.txt).
@@ -83,7 +85,7 @@ Full output: [sentiment](docs/results/sentiment_evaluation.txt) and
 
 ## Run it
 
-You need **Python 3.11+** and an **AtlasCloud API key**.
+You need **Python 3.11+** and a free **Groq API key** from [console.groq.com/keys](https://console.groq.com/keys).
 
 ```bash
 git clone https://github.com/Swaraj-Mandre/Long-Term-Memory-Chatbot.git
@@ -94,7 +96,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Put your key in `.env` after `ATLASCLOUD_API_KEY=`, then:
+Put your key in `.env` after `GROQ_API_KEY=`, then:
 
 ```bash
 python test_connection.py
@@ -114,7 +116,7 @@ The repo is ready for [Render](https://render.com)'s free plan.
 
 1. Sign in to Render with GitHub.
 2. Open [this deploy link](https://render.com/deploy?repo=https://github.com/Swaraj-Mandre/Long-Term-Memory-Chatbot).
-3. Paste your AtlasCloud API key when asked, then deploy.
+3. Paste your Groq API key when asked, then deploy.
 
 | Good to know | |
 |---|---|
@@ -153,7 +155,7 @@ moved. Use `/forget city` to delete a topic for good.
 ├── memory_manager.py     3 memory layers, fact updates, privacy
 ├── vector_store.py       ChromaDB storage
 ├── embedder.py           text to vectors, runs locally
-├── llm_client.py         DeepSeek v4 Flash via AtlasCloud
+├── llm_client.py         GPT-OSS 120B via Groq
 ├── config.py             every setting in one place
 ├── run.py                start the app
 ├── light_models.py       small models for the free server
@@ -177,7 +179,7 @@ Each file has one job. The reasoning is in the comments.
 
 | Part | Tool |
 |---|---|
-| Language model | DeepSeek v4 Flash (AtlasCloud) |
+| Language model | GPT-OSS 120B (Groq, free plan) |
 | Emotion model | DistilRoBERTa, 7 emotions, runs locally |
 | Embeddings | all-MiniLM-L6-v2, runs locally |
 | Vector database | ChromaDB on disk |

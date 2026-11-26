@@ -16,39 +16,41 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 # ---------------------------------------------------------------------------
-# 1. Language model (AtlasCloud, serving DeepSeek v4 Flash)
+# 1. Language model (Groq, serving GPT-OSS 120B)
 # ---------------------------------------------------------------------------
-# AtlasCloud speaks the standard OpenAI chat-completions format, so the client
-# we write against it would also work with other providers later.
+# Groq hosts open-weight models and has a free plan with no card needed. For
+# GPT-OSS 120B it allows 1,000 requests and 200,000 tokens a day, and 8,000
+# tokens a minute. Each chat message uses two requests (read it, then reply).
+#
+# Groq speaks the standard OpenAI chat-completions format, so switching to
+# another provider later means changing these three values and nothing else.
 
-LLM_API_KEY = os.getenv("ATLASCLOUD_API_KEY", "")
-LLM_BASE_URL = os.getenv("ATLASCLOUD_BASE_URL", "https://api.atlascloud.ai/v1")
-LLM_MODEL = os.getenv("ATLASCLOUD_MODEL", "deepseek-ai/deepseek-v4-flash")
+LLM_API_KEY = os.getenv("GROQ_API_KEY", "")
+LLM_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+LLM_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
-# IMPORTANT: DeepSeek v4 Flash is a "reasoning" model. Before it writes the
-# answer, it thinks through the problem internally, and that thinking is
-# charged against max_tokens. The response separates the two:
+# GPT-OSS is a "reasoning" model. Before it writes the answer, it thinks
+# through the problem internally, and that thinking counts against max_tokens.
+# If the budget runs out during the thinking, the answer comes back EMPTY with
+# no error to warn you.
 #
-#     reasoning_content -> the internal thinking (we do not show this)
-#     content           -> the actual answer
-#
-# So max_tokens has to cover BOTH. Setting it too low is dangerous, because the
-# reasoning uses up the whole budget and `content` comes back EMPTY with no
-# error to warn you. A test asking for one word with max_tokens=10 returned
-# nothing at all: 42 tokens of reasoning, 0 tokens of answer.
-#
-# The values below are generous for this reason. We call for two different
-# jobs, so each gets its own settings.
+# "low" keeps the thinking short. That makes replies faster, and it matters on
+# the free plan: the 8,000 tokens a minute are shared by both requests.
+REASONING_EFFORT = "low"
+
+# We call for two different jobs, so each gets its own settings. The budgets
+# cover the thinking plus the answer, and stay small enough that two requests
+# fit inside one minute's free allowance.
 
 # Job A - writing a reply to the user. A little creativity reads better.
 CHAT_TEMPERATURE = 0.3
-CHAT_MAX_TOKENS = 3000
+CHAT_MAX_TOKENS = 1500
 
 # Job B - pulling facts out of a message as JSON. We want the SAME answer every
 # time for the same input, so temperature is 0. Creativity here would only
 # invent facts the user never said.
 EXTRACT_TEMPERATURE = 0.0
-EXTRACT_MAX_TOKENS = 3000
+EXTRACT_MAX_TOKENS = 1500
 
 LLM_TIMEOUT_SECONDS = 60
 
@@ -172,12 +174,12 @@ def check_configuration():
 
     if not LLM_API_KEY:
         problems.append(
-            "ATLASCLOUD_API_KEY is not set. Copy .env.example to .env and "
+            "GROQ_API_KEY is not set. Copy .env.example to .env and "
             "put your key in it."
         )
 
     if not LLM_BASE_URL.startswith("http"):
-        problems.append("ATLASCLOUD_BASE_URL does not look like a URL.")
+        problems.append("GROQ_BASE_URL does not look like a URL.")
 
     return problems
 
